@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PayFlow.Infrastructure\PayFlow.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\PayFlow.SharedKernel\PayFlow.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PayFlow.UnitTests" />
+    <InternalsVisibleTo Include="PayFlow.IntegrationTests" />
+    <InternalsVisibleTo Include="PayFlow.ArchitectureTests" />
+  </ItemGroup>
+
+</Project>

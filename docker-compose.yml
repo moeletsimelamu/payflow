@@ -1,0 +1,126 @@
+# PayFlow local environment: database, cache, migration job, API, HTTPS gateway and a demo
+# webhook receiver. The Angular dashboard is added in Phase 8.
+#
+#   cp .env.example .env     # then replace every change-me value
+#   docker compose up --build
+#
+# Dashboard API: https://localhost:8443/api   (self-signed local CA; curl -k)
+# Merchant API:  https://localhost:8443/v1
+# Webhook sink:  http://localhost:8090      (register http://webhook-sink:8080/webhooks as an endpoint)
+# All ports are bound to 127.0.0.1 only.
+
+name: payflow
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: payflow
+      POSTGRES_USER: payflow_migrator
+      POSTGRES_PASSWORD: ${POSTGRES_MIGRATOR_PASSWORD:?Set POSTGRES_MIGRATOR_PASSWORD in .env}
+      PAYFLOW_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set POSTGRES_APP_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./deploy/postgres/sql:/payflow-sql:ro
+    ports:
+      - "127.0.0.1:${PAYFLOW_DB_PORT:-5432}:5432"
+    networks: [payflow]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payflow_migrator -d payflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}", "--save", "", "--appendonly", "no"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    ports:
+      - "127.0.0.1:${PAYFLOW_REDIS_PORT:-6379}:6379"
+    networks: [payflow]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-shot job: applies EF Core migrations with the DDL-capable role, then exits.
+  migrate:
+    build:
+      context: .
+      dockerfile: src/PayFlow.Api/Dockerfile
+    image: payflow-api:local
+    command: ["--migrate"]
+    environment:
+      ConnectionStrings__PayFlow: "Host=postgres;Database=payflow;Username=payflow_migrator;Password=${POSTGRES_MIGRATOR_PASSWORD};GSS Encryption Mode=Disable"
+      ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
+      Security__ApiKeys__Pepper: ${API_KEY_PEPPER:?Set API_KEY_PEPPER in .env}
+      Security__MasterKey: ${PAYFLOW_MASTER_KEY:?Set PAYFLOW_MASTER_KEY in .env}
+    networks: [payflow]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: payflow-api:local
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__PayFlow: "Host=postgres;Database=payflow;Username=payflow_app;Password=${POSTGRES_APP_PASSWORD};GSS Encryption Mode=Disable"
+      ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
+      Security__ApiKeys__Pepper: ${API_KEY_PEPPER}
+      Security__MasterKey: ${PAYFLOW_MASTER_KEY}
+      # Local demo only: lets the API deliver to the webhook-sink container over plain HTTP on the
+      # private Compose network. Never enable these in production: they turn the SSRF guard off.
+      Webhooks__AllowHttp: "true"
+      Webhooks__AllowPrivateNetworks: "true"
+      Seed__PlatformAdmin__Email: ${PAYFLOW_ADMIN_EMAIL:?Set PAYFLOW_ADMIN_EMAIL in .env}
+      Seed__PlatformAdmin__Password: ${PAYFLOW_ADMIN_PASSWORD:?Set PAYFLOW_ADMIN_PASSWORD in .env}
+      # Trust X-Forwarded-Proto/For only from the gateway's network.
+      ReverseProxy__TrustedNetworks__0: "172.31.250.0/24"
+    ports:
+      # Plain HTTP for health checks and debugging only; the dashboard API refuses non-HTTPS requests.
+      - "127.0.0.1:${PAYFLOW_API_PORT:-8080}:8080"
+    networks: [payflow]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Reference webhook receiver: verifies signatures, flags duplicates, can be told to fail (POST /config).
+  webhook-sink:
+    build:
+      context: .
+      dockerfile: tools/webhook-sink/Dockerfile
+    image: payflow-webhook-sink:local
+    ports:
+      - "127.0.0.1:${PAYFLOW_SINK_PORT:-8090}:8080"
+    networks: [payflow]
+    restart: unless-stopped
+
+  # TLS-terminating gateway (Caddy, local CA). Phase 8 serves the Angular app from here too.
+  gateway:
+    image: caddy:2.10-alpine
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    ports:
+      - "127.0.0.1:${PAYFLOW_HTTPS_PORT:-8443}:443"
+    networks: [payflow]
+    depends_on:
+      - api
+    restart: unless-stopped
+
+networks:
+  payflow:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+
+volumes:
+  pgdata:
+  caddy_data:

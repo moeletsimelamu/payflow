@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Signs and verifies PayFlow webhook payloads. No dependencies, so merchant receivers can use it as-is.</Description>
+  </PropertyGroup>
+
+</Project>

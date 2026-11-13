@@ -1,0 +1,28 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+TestResults/
+*.trx
+coverage/
+node_modules/
+dist/
+.angular/
+.env
+*.pfx
+appsettings.*.local.json
+
+# Other environment files and key material (the example file stays tracked)
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and OS clutter
+*.log
+.DS_Store
+Thumbs.db

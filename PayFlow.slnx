@@ -1,0 +1,27 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PayFlow.Api/PayFlow.Api.csproj" />
+    <Project Path="src/PayFlow.Infrastructure/PayFlow.Infrastructure.csproj" />
+    <Project Path="src/PayFlow.Migrations/PayFlow.Migrations.csproj" />
+    <Project Path="src/PayFlow.SharedKernel/PayFlow.SharedKernel.csproj" />
+    <Project Path="src/PayFlow.Webhooks.Signature/PayFlow.Webhooks.Signature.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/">
+    <Project Path="src/Modules/PayFlow.Modules.Audit/PayFlow.Modules.Audit.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Identity/PayFlow.Modules.Identity.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Ledger/PayFlow.Modules.Ledger.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Merchants/PayFlow.Modules.Merchants.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Payments/PayFlow.Modules.Payments.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Refunds/PayFlow.Modules.Refunds.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Webhooks/PayFlow.Modules.Webhooks.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PayFlow.ArchitectureTests/PayFlow.ArchitectureTests.csproj" />
+    <Project Path="tests/PayFlow.IntegrationTests/PayFlow.IntegrationTests.csproj" />
+    <Project Path="tests/PayFlow.UnitTests/PayFlow.UnitTests.csproj" />
+  </Folder>
+  <Folder Name="/tools/" />
+  <Folder Name="/tools/webhook-sink/">
+    <Project Path="tools/webhook-sink/PayFlow.WebhookSink.csproj" />
+  </Folder>
+</Solution>
