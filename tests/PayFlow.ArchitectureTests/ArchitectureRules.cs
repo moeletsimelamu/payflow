@@ -32,6 +32,8 @@ public sealed class ArchitectureRules
         typeof(PayFlow.Modules.Payments.PaymentsModule).Assembly,
         typeof(PayFlow.Modules.Refunds.RefundsModule).Assembly,
         typeof(PayFlow.Modules.Webhooks.WebhooksModule).Assembly,
+        typeof(PayFlow.Modules.Settlement.SettlementModule).Assembly,
+        typeof(PayFlow.Modules.Reconciliation.ReconciliationModule).Assembly,
     ];
 
     private static IEnumerable<Assembly> AllPayFlowAssemblies =>

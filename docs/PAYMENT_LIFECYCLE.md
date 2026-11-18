@@ -304,10 +304,10 @@ sequenceDiagram
 - Delivery is **at least once**: a sender that crashes after sending but before recording re-sends once its 60-second claim lease expires. Receivers must de-duplicate on the event id.
 - A disabled endpoint's pending deliveries are cancelled. Manual redelivery restarts the 8-attempt budget.
 
-## 10. Reconciliation matching rules (summary — expanded in RECONCILIATION.md, Phase 7)
+## 10. Reconciliation matching rules (summary — full detail in [RECONCILIATION.md](RECONCILIATION.md))
 
 Input: one imported statement (CSV: `external_id, payflow_reference, type, amount, currency, status, value_date`).
-Internal scope: payments and refunds with `completed_at` in the statement period.
+Internal scope: what the acquirer is expected to report, i.e. captured or reversed payments and succeeded refunds with `completed_at` in the statement period. Declined, failed and expired payments never reach the acquirer's books.
 
 1. Group statement lines by `(type, payflow_reference)`. The first line in each group is evaluated; extra lines → **DuplicateExternal**.
 2. For each evaluated line, look up the internal record by reference (regardless of period). Precedence of outcomes:

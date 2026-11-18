@@ -1,6 +1,6 @@
 # PayFlow — API Reference
 
-Status: **covers Phases 2–6** (authentication, merchants, API keys, members, payments, refunds, webhooks). Settlement and reconciliation endpoints are added as their phases are built.
+Status: **covers Phases 2–7** (authentication, merchants, API keys, members, payments, refunds, webhooks, settlement, reconciliation).
 
 > Every payment in PayFlow is simulated. No request ever reaches a bank or card network.
 
@@ -228,7 +228,7 @@ Refunds are completed asynchronously (within a few seconds) and end `Succeeded` 
 | `GET …/webhook-deliveries/{deliveryId}` | MM | One delivery with every attempt: status, duration, response excerpt (2 KB), error kind, request headers with the signature masked. |
 | `POST …/webhook-deliveries/{deliveryId}/redeliver` | MA | Send again now, with a fresh 8-attempt budget. |
 
-Event types: `payment.pending`, `payment.succeeded`, `payment.declined`, `payment.failed`, `payment.expired`, `payment.reversed`, `refund.succeeded`, `refund.failed`, `webhook.ping`, or `*` for all. URLs must be `https` to a public host: credentials, `localhost`, internal names and private, loopback or link-local addresses are refused (`400 webhook_url_not_allowed`), and the resolved address is checked again when sending. Signature format and retry schedule: [PAYMENT_LIFECYCLE.md §9.3](PAYMENT_LIFECYCLE.md).
+Event types: `payment.pending`, `payment.succeeded`, `payment.declined`, `payment.failed`, `payment.expired`, `payment.reversed`, `refund.succeeded`, `refund.failed`, `settlement.paid`, `webhook.ping`, or `*` for all. URLs must be `https` to a public host: credentials, `localhost`, internal names and private, loopback or link-local addresses are refused (`400 webhook_url_not_allowed`), and the resolved address is checked again when sending. Signature format and retry schedule: [PAYMENT_LIFECYCLE.md §9.3](PAYMENT_LIFECYCLE.md).
 
 ## Dashboard: payments (Phase 4)
 
@@ -240,3 +240,40 @@ Event types: `payment.pending`, `payment.succeeded`, `payment.declined`, `paymen
 | `GET /api/merchants/{merchantId}/payments/{paymentId}/refunds` | MM | Refund history and reversal for a payment. |
 | `POST /api/merchants/{merchantId}/payments/{paymentId}/refunds` | MA, MerchantOperator | Refund from the dashboard (`Idempotency-Key` header). Operators are limited to the merchant's per-currency operator limit. |
 | `POST /api/merchants/{merchantId}/payments/{paymentId}/reversal` | MA | Reverse from the dashboard (`Idempotency-Key` header). |
+
+## Dashboard: settlement (Phase 7)
+
+Rules and worked examples: [SETTLEMENT.md](SETTLEMENT.md). Amounts are decimal strings; every batch carries `"simulated": true`.
+
+| Method & path | Role | Purpose |
+|---|---|---|
+| `POST /api/settlements/runs` | PA | `{ merchantId?, currency?, cutoff? }` → `200 { cutoff, created[], skipped[] }`. Cut-off defaults to the start of the current UTC day and may not be in the future (`400 invalid_cutoff`). Skip reasons: `open_batch_exists`, `nothing_to_settle`, `concurrent_settlement`. |
+| `GET /api/settlements?merchantId=&currency=&status=&page=&pageSize=` | PA | All batches, newest first. |
+| `GET /api/settlements/{settlementId}` | PA | One batch (`stl_…`) with line items. |
+| `POST /api/settlements/{settlementId}/pay` | PA | `{ simulateFailure }`. Success → `Paid` with a `SIM-PAYOUT-…` reference, a `SettlementPaid` ledger entry and a `settlement.paid` event. Failure → `Failed`, nothing posted, retry allowed. A paid batch → `409 settlement_already_paid`. |
+| `GET /api/merchants/{merchantId}/settlements?currency=&status=&page=` | MM | The merchant's batches. |
+| `GET /api/merchants/{merchantId}/settlements/{settlementId}` | MM | One batch with line items; another merchant's batch → `404`. |
+| `GET /api/merchants/{merchantId}/settlements/{settlementId}/items.csv` | MM | Line items as CSV: `settlement_id,type,source_id,payment_id,completed_at,gross,fee,net,currency`. |
+
+Batch fields: `id, merchantId, currency, status (Pending|Paid|Failed), cutoffAt, paymentCount, refundCount, grossPayments, totalFees, totalRefunds, carriedForwardIn, netAmount, payoutAmount, carriedForwardOut, createdAt, paidAt, payoutReference, failureReason, simulated, items`.
+
+## Dashboard: reconciliation (Phase 7)
+
+All PlatformAdmin. Format, matching rules and workflow: [RECONCILIATION.md](RECONCILIATION.md).
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/reconciliation/statements/generate` | `{ periodStart, periodEnd, sourceName?, inject?: { missingExternal, missingInternal, amountMismatch, currencyMismatch, duplicateExternal, statusDiscrepancy } }` → `200 { sourceName, periodStart, periodEnd, fileName, lineCount, csv, injected[] }`. Does not import. At most 31 days; `422 not_enough_transactions` if the period is too small for the injections. |
+| `POST /api/reconciliation/statements` | `{ sourceName, periodStart, periodEnd, fileName, csv }` → `201` statement (`stmt_…`). Any bad line → `400 invalid_statement` with `errors` keyed `"line N"`, nothing stored. Same file again → `409 statement_already_imported`. |
+| `GET /api/reconciliation/statements?page=&pageSize=` | Imported statements, newest first. |
+| `GET /api/reconciliation/statements/{statementId}` | One statement: hash, line count, `status (Imported|Reconciled)`, `lastRunId`. |
+| `POST /api/reconciliation/statements/{statementId}/runs` | Match → `201 { id (rcr_…), counts{matched, missingExternal, missingInternal, amountMismatch, currencyMismatch, duplicateExternal, statusDiscrepancy}, exceptionsCreated, exceptionsSeenAgain }`. Safe to repeat. |
+| `GET /api/reconciliation/runs/{runId}` | Run summary. |
+| `GET /api/reconciliation/runs/{runId}/results?outcome=&page=&pageSize=` | Every classified line and missing record of that run. |
+| `GET /api/reconciliation/exceptions?status=&outcome=&statementId=&page=&pageSize=` | Exception queue. |
+| `GET /api/reconciliation/exceptions/{exceptionId}` | One exception (`rex_…`) with its history. |
+| `POST /api/reconciliation/exceptions/{exceptionId}/review` | `{ note? }` → `InReview`. |
+| `POST /api/reconciliation/exceptions/{exceptionId}/resolve` | `{ resolutionType, note, adjustment?: { amount, direction: IncreaseReceivable|DecreaseReceivable } }` → `Resolved`. With an adjustment, `resolutionType` is `AdjustmentPosted` and a `ReconciliationAdjustment` ledger entry is posted. |
+| `POST /api/reconciliation/exceptions/{exceptionId}/dismiss` | `{ note }` (required) → `Dismissed` as `FalsePositive`. |
+
+Workflow errors: `400 note_required`, `400 resolution_type_required`, `400 invalid_resolution_type`, `400 invalid_adjustment_amount`, `422 invalid_exception_transition`, `409 concurrent_update`.

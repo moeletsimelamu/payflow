@@ -18,7 +18,8 @@ double-entry ledgering, refunds, signed webhooks, settlement and reconciliation.
 | 4. Payments, lifecycle, idempotency | ☑ tested |
 | 5. Refunds & reversals | ☑ tested |
 | 6. Webhooks & delivery retries | ☑ tested (see [TESTING.md](docs/TESTING.md)) |
-| 7. Settlement & reconciliation | next |
+| 7. Settlement & reconciliation | ☑ tested |
+| 8. Frontend & reporting | next |
 
 Details and exit gates: [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -116,4 +117,6 @@ docs/                      design documentation
 | [TESTING.md](docs/TESTING.md) | Test suites, how to run them, exit-gate coverage |
 | [ROADMAP.md](docs/ROADMAP.md) | Phases, deliverables, exit gates |
 | [API.md](docs/API.md) | Endpoints, conventions, error codes |
-| SECURITY.md · RECONCILIATION.md · DEPLOYMENT.md | Written as the corresponding phases are built |
+| [SETTLEMENT.md](docs/SETTLEMENT.md) | Settlement batches, carry-forward, payouts, concurrency guarantees |
+| [RECONCILIATION.md](docs/RECONCILIATION.md) | Statement format, generator, matching rules, exception workflow, adjustments |
+| SECURITY.md · DEPLOYMENT.md | Written as the corresponding phases are built |

@@ -22,7 +22,10 @@ public static class RefundsModule
         services.AddSingleton<IModuleDbModel, RefundsDbModel>();
         services.AddScoped<RefundService>();
         services.AddScoped<RefundQueries>();
-        services.TryAddScoped<ISettlementLookup, NoSettlementsYet>(); // replaced by the Settlement module in Phase 7
+        services.AddScoped<RefundSettlementFeed>();
+        services.AddScoped<IRefundSettlementFeed>(sp => sp.GetRequiredService<RefundSettlementFeed>());
+        services.AddScoped<IRefundLookup>(sp => sp.GetRequiredService<RefundSettlementFeed>());
+        services.TryAddScoped<ISettlementLookup, NoSettlementsYet>(); // the Settlement module registers the real lookup first
         services.AddValidatorsFromAssemblyContaining<CreateRefundRequestValidator>(ServiceLifetime.Scoped, includeInternalTypes: true);
         services.AddRecurringJob<RefundProcessingJob>(o => o.RefundProcessingInterval);
         return services;
