@@ -208,7 +208,7 @@ Indexes: `(merchant_id, occurred_at DESC)`, `(target_type, target_id)`.
 
 ### `reporting`
 
-Phase 8 starts with indexed SQL queries/views over the module tables, cached in Redis for 60 s.
+No tables. The Reporting module runs read-only SQL over the module tables (payments, refunds, settlement batches, reconciliation exceptions, webhook attempts) and caches each result in Redis for 60 s. The `completed_at` and unsettled indexes added in Phase 7 serve these queries.
 If they become slow, add `daily_merchant_stats` rolled up by a worker (append on day close, recomputable from source).
 
 ## 4. Database roles

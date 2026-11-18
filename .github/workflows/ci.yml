@@ -50,11 +50,41 @@ jobs:
           name: test-results
           path: TestResults
 
-  image:
-    name: Build API image
+  frontend:
+    name: Build and test (dashboard)
     runs-on: ubuntu-latest
-    needs: backend
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/payflow-dashboard
     steps:
       - uses: actions/checkout@v5
-      - name: docker build
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.14.0
+          cache: npm
+          cache-dependency-path: web/payflow-dashboard/package-lock.json
+
+      - name: Install (no install scripts)
+        run: npm ci --ignore-scripts --no-fund
+
+      - name: Unit, money-formatting and accessibility tests (Vitest + axe)
+        run: npm run test:ci
+
+      - name: Production build (bundle budgets enforced)
+        run: npx ng build --configuration production
+
+      - name: Fail on high-severity vulnerable packages
+        run: npm audit --audit-level=high --omit=dev
+
+  image:
+    name: Build images
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v5
+      - name: API image
         run: docker build -f src/PayFlow.Api/Dockerfile -t payflow-api:ci .
+      - name: Dashboard image
+        run: docker build -t payflow-web:ci web/payflow-dashboard

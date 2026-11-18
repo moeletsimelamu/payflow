@@ -8,6 +8,7 @@ using PayFlow.Modules.Merchants;
 using PayFlow.Modules.Payments;
 using PayFlow.Modules.Reconciliation;
 using PayFlow.Modules.Refunds;
+using PayFlow.Modules.Reporting;
 using PayFlow.Modules.Settlement;
 using PayFlow.Modules.Webhooks;
 using PayFlow.SharedKernel.Security;
@@ -28,6 +29,7 @@ builder.Services
     .AddWebhooksModule(builder.Configuration)
     .AddSettlementModule()
     .AddReconciliationModule()
+    .AddReportingModule()
     .AddScoped<IActorContext, HttpActorContext>()
     .AddPayFlowApi(builder.Configuration);
 
@@ -50,6 +52,7 @@ app.MapRefundsDashboard();
 app.MapWebhooksDashboard();
 app.MapSettlementEndpoints();
 app.MapReconciliationEndpoints();
+app.MapReportingEndpoints();
 
 var merchantApi = app.MapMerchantApiGroup();
 merchantApi.MapMerchantsApi();

@@ -19,13 +19,14 @@ double-entry ledgering, refunds, signed webhooks, settlement and reconciliation.
 | 5. Refunds & reversals | ☑ tested |
 | 6. Webhooks & delivery retries | ☑ tested (see [TESTING.md](docs/TESTING.md)) |
 | 7. Settlement & reconciliation | ☑ tested |
-| 8. Frontend & reporting | next |
+| 8. Frontend & reporting | ☑ tested |
+| 9. Hardening & automated testing | next |
 
 Details and exit gates: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Stack
 
-ASP.NET Core (.NET 10 LTS) · EF Core 10 · PostgreSQL 17 · Redis 7.4 · Angular 21 (from Phase 8) ·
+ASP.NET Core (.NET 10 LTS) · EF Core 10 · PostgreSQL 17 · Redis 7.4 · Angular 21 + Angular Material + ECharts ·
 xUnit v3 + Testcontainers · Docker Compose · GitHub Actions
 
 ## Quick start (Docker)
@@ -42,7 +43,8 @@ Edit `.env` and replace every `change-me` value, then:
 docker compose up --build
 ```
 
-- API through the HTTPS gateway: <https://localhost:8443> (health: `/health/ready`). The certificate comes from Caddy's local CA, so browsers warn and curl needs `-k`.
+- Dashboard: <https://localhost:8443>. Sign in as the PlatformAdmin below. The certificate comes from Caddy's local CA, so browsers warn until you trust it, and curl needs `-k` (or `--cacert` with the root certificate from `docker compose cp gateway:/data/caddy/pki/authorities/local/root.crt .`).
+- The API is on the same origin: `/api` (dashboard), `/v1` (merchant API), `/health/ready`.
 - The dashboard API (`/api`) only works over HTTPS; plain <http://localhost:8080> is for health checks and debugging.
 - If ports 5432, 6379, 8080 or 8443 are already in use, set `PAYFLOW_DB_PORT`, `PAYFLOW_REDIS_PORT`, `PAYFLOW_API_PORT` and `PAYFLOW_HTTPS_PORT` in `.env`.
 - `API_KEY_PEPPER` must be a base64 secret of at least 32 bytes, and `PAYFLOW_MASTER_KEY` exactly 32 bytes (`openssl rand -base64 32` for both).
@@ -50,7 +52,9 @@ docker compose up --build
 - A PlatformAdmin is created on first start from `PAYFLOW_ADMIN_EMAIL` / `PAYFLOW_ADMIN_PASSWORD`.
 - The `migrate` job applies migrations as `payflow_migrator`; the API runs as the restricted `payflow_app` role.
 
-Walkthrough until the UI arrives in Phase 8 (full reference in [API.md](docs/API.md)):
+In the dashboard, a PlatformAdmin sees **Merchants**, **Settlements**, **Reconciliation** and **Reports**; merchant users see their **Overview**, **Transactions** (with lifecycle, ledger and refunds), **Settlements**, **Reports** and, for MerchantAdmins, **Webhooks**.
+
+The same flow through the API (full reference in [API.md](docs/API.md)):
 1. `GET /api/auth/antiforgery`, then `POST /api/auth/login` as the PlatformAdmin, with `X-XSRF-TOKEN` set from the `XSRF-TOKEN` cookie.
 2. `POST /api/merchants` with an `adminEmail`; note the one-time `invitationToken`.
 3. `POST /api/merchants/{id}/status` with `{"status":"Active"}`.
@@ -90,18 +94,28 @@ dotnet test --solution PayFlow.slnx
 
 Integration tests need Docker. See [docs/TESTING.md](docs/TESTING.md), including a Windows long-path workaround.
 
+Dashboard (Node 22.14+):
+
+```bash
+cd web/payflow-dashboard
+npm ci --ignore-scripts
+npm run test:ci          # Vitest: components, money formatting, axe accessibility
+npm run start:gateway    # http://localhost:4200 against the running Compose stack (see proxy.conf.mjs)
+```
+
 ## Repository layout
 
 ```
 src/PayFlow.Api            host: middleware, auth wiring, health, startup
 src/PayFlow.SharedKernel   Money, currencies, public ids, results, redaction
 src/PayFlow.Infrastructure DbContext, outbox, correlation, HTTP helpers
-src/Modules/*              one project per module (Identity, Audit, Merchants, Ledger, Payments, Refunds, Webhooks so far)
+src/Modules/*              one project per module (Identity, Audit, Merchants, Ledger, Payments, Refunds, Webhooks, Settlement, Reconciliation, Reporting)
 src/PayFlow.Webhooks.Signature  dependency-free signing/verification library for receivers
 src/PayFlow.Migrations     EF Core migrations
 tests/*                    unit, architecture, integration tests
 deploy/postgres            database role setup
 deploy/caddy               local HTTPS gateway
+web/payflow-dashboard      Angular dashboard (served by nginx behind the gateway)
 tools/webhook-sink         demo webhook receiver
 docs/                      design documentation
 ```

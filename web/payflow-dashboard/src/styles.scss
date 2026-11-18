@@ -1,0 +1,395 @@
+@use '@angular/material' as mat;
+
+// System fonts only: nothing is fetched from third-party hosts (see the Content-Security-Policy in nginx.conf).
+$font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+html {
+  color-scheme: light;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+      ),
+      typography: (
+        plain-family: $font,
+        brand-family: $font,
+      ),
+      density: 0,
+    )
+  );
+}
+
+// Text colours below are checked against WCAG 2.2 AA (4.5:1 on their backgrounds).
+:root {
+  --pf-text: #1b1b1f;
+  --pf-muted: #4a4f57;
+  --pf-border: #c4c7cf;
+  --pf-surface: #ffffff;
+  --pf-page: #f4f5f8;
+  --pf-error: #a4161a;
+  --pf-notice-bg: #e8f1fb;
+  --pf-focus: #0b57d0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: $font;
+  color: var(--pf-text);
+  background: var(--pf-page);
+  line-height: 1.5;
+}
+
+a {
+  color: #0b57d0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--pf-focus);
+  outline-offset: 2px;
+}
+
+code,
+.pf-mono {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.pf-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: 8px 12px;
+  background: var(--pf-surface);
+}
+.pf-skip-link:focus {
+  left: 8px;
+}
+
+.pf-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+// Layout
+.pf-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  gap: 12px;
+}
+.pf-brand {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+.pf-sim-flag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: #fff3cd;
+  color: #5c4400;
+}
+.pf-spacer {
+  flex: 1;
+}
+.pf-user {
+  font-size: 0.875rem;
+}
+.pf-container {
+  min-height: calc(100vh - 64px);
+}
+mat-sidenav {
+  width: 240px;
+}
+.pf-nav-heading {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pf-muted);
+  margin: 16px 16px 0;
+}
+.pf-active {
+  font-weight: 600;
+  background: rgba(11, 87, 208, 0.08);
+}
+.pf-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 16px;
+  font-size: 0.875rem;
+}
+.pf-main {
+  padding: 24px;
+  max-width: 1280px;
+}
+.pf-main:focus {
+  outline: none;
+}
+
+// Content
+.pf-page-header h1 {
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pf-page-header {
+  margin-bottom: 16px;
+}
+.pf-muted {
+  color: var(--pf-muted);
+}
+.pf-error {
+  color: var(--pf-error);
+}
+.pf-notice {
+  background: var(--pf-notice-bg);
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+.pf-card {
+  background: var(--pf-surface);
+  border: 1px solid var(--pf-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+.pf-card h2 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+.pf-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+}
+.pf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+.pf-narrow {
+  width: 140px;
+}
+.pf-full {
+  width: 100%;
+}
+.pf-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.pf-kpi {
+  background: var(--pf-surface);
+  border: 1px solid var(--pf-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+}
+.pf-kpi-label {
+  font-size: 0.8rem;
+  color: var(--pf-muted);
+}
+.pf-kpi-value {
+  font-size: 1.35rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-table-wrap {
+  overflow-x: auto;
+}
+.pf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.pf-table caption:not(.pf-visually-hidden) {
+  text-align: left;
+  font-weight: 600;
+  padding: 12px 0 4px;
+}
+.pf-table th,
+.pf-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--pf-border);
+  vertical-align: top;
+}
+.pf-table thead th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pf-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pf-total th,
+.pf-total td {
+  font-weight: 700;
+  border-top: 2px solid var(--pf-text);
+}
+.pf-calc {
+  max-width: 480px;
+}
+.pf-when {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pf-break {
+  word-break: break-all;
+}
+
+.pf-dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+.pf-dl dt {
+  color: var(--pf-muted);
+}
+.pf-dl dd {
+  margin: 0;
+}
+
+.pf-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.pf-timeline li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--pf-border);
+}
+.pf-timeline-when {
+  font-variant-numeric: tabular-nums;
+  color: var(--pf-muted);
+  min-width: 190px;
+}
+.pf-list {
+  padding-left: 20px;
+}
+.pf-attempts {
+  margin: 0;
+}
+.pf-excerpt {
+  white-space: pre-wrap;
+  max-height: 160px;
+  overflow: auto;
+  background: var(--pf-page);
+  padding: 8px;
+}
+.pf-fieldset {
+  border: 1px solid var(--pf-border);
+  border-radius: 6px;
+  margin: 12px 0;
+  mat-radio-button {
+    display: block;
+  }
+}
+
+// Status badges: text always states the status; colour is supplementary.
+.pf-badge {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pf-badge--good {
+  background: #dcf2e3;
+  color: #0d5223;
+}
+.pf-badge--bad {
+  background: #fbe0e0;
+  color: #8a1116;
+}
+.pf-badge--warn {
+  background: #fff1cc;
+  color: #5c4400;
+}
+.pf-badge--info {
+  background: #e1ecfb;
+  color: #123f86;
+}
+.pf-badge--neutral {
+  background: #e8e9ec;
+  color: #33373d;
+}
+
+// Charts
+.pf-chart {
+  margin: 0 0 16px;
+  background: var(--pf-surface);
+  border: 1px solid var(--pf-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.pf-chart figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.pf-chart-title {
+  font-weight: 600;
+}
+.pf-chart-canvas {
+  height: 300px;
+}
+.pf-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #0b57d0;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+.pf-button-link {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+// Sign-in
+.pf-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.pf-login-card {
+  width: min(420px, 100%);
+}
+.pf-login-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

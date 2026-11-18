@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\Modules\PayFlow.Modules.Webhooks\PayFlow.Modules.Webhooks.csproj" />
     <ProjectReference Include="..\..\src\PayFlow.Webhooks.Signature\PayFlow.Webhooks.Signature.csproj" />
     <ProjectReference Include="..\..\src\Modules\PayFlow.Modules.Settlement\PayFlow.Modules.Settlement.csproj" />
+    <ProjectReference Include="..\..\src\Modules\PayFlow.Modules.Reporting\PayFlow.Modules.Reporting.csproj" />
     <ProjectReference Include="..\..\src\Modules\PayFlow.Modules.Reconciliation\PayFlow.Modules.Reconciliation.csproj" />
   </ItemGroup>
 

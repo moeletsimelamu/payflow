@@ -26,3 +26,6 @@ appsettings.*.local.json
 *.log
 .DS_Store
 Thumbs.db
+
+# Local gateway CA copied for the dashboard dev proxy
+web/payflow-dashboard/.certs/
