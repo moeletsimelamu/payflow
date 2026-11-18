@@ -277,3 +277,21 @@ All PlatformAdmin. Format, matching rules and workflow: [RECONCILIATION.md](RECO
 | `POST /api/reconciliation/exceptions/{exceptionId}/dismiss` | `{ note }` (required) → `Dismissed` as `FalsePositive`. |
 
 Workflow errors: `400 note_required`, `400 resolution_type_required`, `400 invalid_resolution_type`, `400 invalid_adjustment_amount`, `422 invalid_exception_transition`, `409 concurrent_update`.
+
+## Dashboard: reports (Phase 8)
+
+| Method & path | Role | Purpose |
+|---|---|---|
+| `GET /api/merchants/{merchantId}/reports?currency=&from=&to=` | MM | The merchant's report. |
+| `GET /api/reports?merchantId=&currency=&from=&to=` | PA | All merchants, or one; adds the reconciliation backlog. |
+
+`currency` defaults to ZAR (amounts are never summed across currencies); `from`/`to` are inclusive UTC days, defaulting to the last 30 days, at most 366. Errors: `400 unsupported_currency`, `400 invalid_period`. Results are cached in Redis for 60 seconds per query; `generatedAt` says when the figures were computed.
+
+| Section | Requirement | Contents |
+|---|---|---|
+| `volume` | RPT-1 | Payments created in the window and those that succeeded (including later reversed), with value, per day (every day present) |
+| `outcomes` | RPT-2 | Succeeded, reversed, declined, failed, expired, still in flight; success/decline/failure rates over finished payments (fractions, 4 places); top 5 failure codes |
+| `refunds` | RPT-3 | Refunds that succeeded in the window, failed refunds, refund rate (refunded value / succeeded value) |
+| `settlements` | RPT-4 | Batches created in the window by status, paid out, awaiting payout, deficit carried forward |
+| `reconciliation` | RPT-5 | Platform view only: unresolved exceptions now, by type and age (< 1 day, 1–7 days, > 7 days) |
+| `performance` | RPT-6 | Synchronous processing p50/p95 (ms), webhook attempts, success rate and latency p50/p95 |

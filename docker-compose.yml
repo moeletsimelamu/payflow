@@ -1,10 +1,11 @@
-# PayFlow local environment: database, cache, migration job, API, HTTPS gateway and a demo
-# webhook receiver. The Angular dashboard is added in Phase 8.
+# PayFlow local environment: database, cache, migration job, API, Angular dashboard, HTTPS
+# gateway and a demo webhook receiver.
 #
 #   cp .env.example .env     # then replace every change-me value
 #   docker compose up --build
 #
-# Dashboard API: https://localhost:8443/api   (self-signed local CA; curl -k)
+# Dashboard:     https://localhost:8443         (local CA: trust it or accept the browser warning)
+# Dashboard API: https://localhost:8443/api     (curl -k, or --cacert with Caddy's root.crt)
 # Merchant API:  https://localhost:8443/v1
 # Webhook sink:  http://localhost:8090      (register http://webhook-sink:8080/webhooks as an endpoint)
 # All ports are bound to 127.0.0.1 only.
@@ -102,7 +103,15 @@ services:
     networks: [payflow]
     restart: unless-stopped
 
-  # TLS-terminating gateway (Caddy, local CA). Phase 8 serves the Angular app from here too.
+  # The Angular dashboard as static files (unprivileged nginx). Reached only through the gateway.
+  web:
+    build:
+      context: ./web/payflow-dashboard
+    image: payflow-web:local
+    networks: [payflow]
+    restart: unless-stopped
+
+  # TLS-terminating gateway (Caddy, local CA): /api, /v1, /health → api; everything else → web.
   gateway:
     image: caddy:2.10-alpine
     volumes:
@@ -113,6 +122,7 @@ services:
     networks: [payflow]
     depends_on:
       - api
+      - web
     restart: unless-stopped
 
 networks:

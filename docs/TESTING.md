@@ -1,6 +1,6 @@
 # PayFlow — Testing
 
-Status: **Phases 2–6 covered** (293 unit, 9 architecture, 96 integration tests, all passing); extended every phase. Phase 9 adds E2E (Playwright), load (k6) and coverage gates.
+Status: **Phases 2–8 covered** (333 unit, 9 architecture, 121 integration and 60 dashboard tests, all passing); extended every phase. Phase 9 adds E2E (Playwright), load (k6) and coverage gates.
 
 ## Test projects
 
@@ -9,6 +9,7 @@ Status: **Phases 2–6 covered** (293 unit, 9 architecture, 96 integration tests
 | `tests/PayFlow.UnitTests` | Money rules (precision, half-up rounding, currency mismatch, the documented fee and settlement examples), public ids, redaction in JSON and logs, correlation-id validation, merchant-access authorization, merchant status whitelist (every pair), fee plan safety rules, API key format, HMAC verification and states | No |
 | `tests/PayFlow.ArchitectureTests` | Module boundaries, layer dependencies, no floating-point types anywhere, every `decimal` column is `numeric(19,4)`, every module mapping is registered for migrations, no tables in `public` | No |
 | `tests/PayFlow.IntegrationTests` | The real API against PostgreSQL 17 and Redis 7.4 containers (Testcontainers), connected as the restricted `payflow_app` role exactly as in production | Yes |
+| `web/payflow-dashboard` (`*.spec.ts`) | Angular components in jsdom with a mocked HTTP backend (Vitest), money formatting per currency, page states, refund idempotency, axe-core accessibility rules | No |
 
 ## Running
 
@@ -115,6 +116,18 @@ The factory registers a `CapturingLogSink`, so tests can assert that secrets nev
 Integration tests that need to cross a settlement cut-off run their own host on a `FakeTimeProvider`. Reconciliation tests put their payments on a day of their own, years ahead, because a statement covers every merchant in its period and the database is shared.
 
 Test payment references contain no digits (`PaymentScenario.UniqueReference`). Random hex occasionally formed a 13-digit, Luhn-valid run, which the card-number guard correctly rejected, making webhook tests fail now and then.
+
+## Phase 8 exit gate: covered
+
+| Gate item | Tests |
+|---|---|
+| Component unit tests (Vitest) | `PaymentsPage` (rows, filters, inclusive UTC dates, paging params), `RefundDialog`, `LoginPage`, `ReportsPage`, `StateView`, `navFor` (role-aware navigation), `loadable` (stale responses ignored) |
+| Empty / loading / error states | `StateView` renders exactly one of the four states, with the correlation id and a working retry; the transactions page is tested in all three non-ready states against the mocked API |
+| Money formatting per currency | `money.spec.ts`: ZAR, USD, EUR, GBP (2 decimals), JPY (0), KWD (3); database scale dropped but never rounded; negatives; values beyond 2^53 stay exact; amount validation (precision, positive, above refundable) on BigInt minor units; rates |
+| axe accessibility checks | axe-core (WCAG 2.0–2.2 A/AA rules) finds no violations on the sign-in page, the transactions table, the refund dialog and the reports page. jsdom cannot measure colour contrast, so that rule is off in tests; the palette in `styles.scss` was chosen for 4.5:1 |
+| Also | Refunds reuse one `Idempotency-Key` across retries (a network failure then a retry sends the same key); API refusals become plain explanations; sign-in shows one message for every credential failure; reporting backend: `ReportingQueryTests` (defaults, limits, rates, cache keys) and `ReportingTests` (exact figures for a known merchant, 60-second cache, per-currency separation, tenant isolation, platform-only reconciliation backlog) |
+
+The dashboard was also driven in the browser against the Compose stack (sign-in, overview, transaction explorer, detail with ledger, refund dialog rejecting an over-refund then refunding, reports with charts).
 
 ## End-to-end check against Docker Compose
 

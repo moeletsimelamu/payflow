@@ -1,6 +1,7 @@
 # Local HTTPS gateway. Caddy issues a certificate for "localhost" from its own local CA
-# (stored in the caddy_data volume). Browsers will warn until that CA is trusted; for curl use -k.
-# Phase 8 adds the Angular dashboard as static files behind this same origin.
+# (stored in the caddy_data volume). Browsers warn until that CA is trusted; for curl use -k or
+# --cacert with the root certificate (docker compose cp gateway:/data/caddy/pki/authorities/local/root.crt .).
+# One origin for the dashboard and its API keeps the session cookie same-site.
 {
 	auto_https disable_redirects
 }
@@ -9,7 +10,15 @@ https://localhost {
 	tls internal
 
 	# Caddy sets X-Forwarded-For and X-Forwarded-Proto; the API trusts them only from the gateway network.
-	reverse_proxy api:8080
+	@api path /api /api/* /v1 /v1/* /health /health/*
+	handle @api {
+		reverse_proxy api:8080
+	}
+
+	# Everything else is the Angular app (nginx falls back to index.html for client-side routes).
+	handle {
+		reverse_proxy web:8080
+	}
 
 	header {
 		Strict-Transport-Security "max-age=31536000"

@@ -211,7 +211,7 @@ All workers are `BackgroundService`s inside the API host, safe to run on multipl
 
 ## 10. Implementation notes (Phase 2)
 
-- **Versions in use:** .NET SDK 10.0.403 (runtime 10.0.14), EF Core / ASP.NET Core packages 10.0.15, Npgsql EF 10.0.3, Serilog.AspNetCore 10.0.0, FluentValidation 12.2, xUnit v3 4.0, Testcontainers 4.16, Angular CLI 21.2.13 (dashboard starts in Phase 8). .NET 11 is released but is a short-term-support release; PayFlow stays on .NET 10 LTS.
+- **Versions in use:** .NET SDK 10.0.403 (runtime 10.0.14), EF Core / ASP.NET Core packages 10.0.15, Npgsql EF 10.0.3, Serilog.AspNetCore 10.0.0, FluentValidation 12.2, xUnit v3 4.0, Testcontainers 4.16, Angular CLI 21.2.13; dashboard: Angular 21.2, Angular Material 21.2, ngx-echarts 21 with ECharts 6.1, Vitest 4 with jsdom, axe-core 4.14. .NET 11 is released but is a short-term-support release; PayFlow stays on .NET 10 LTS.
 - **Tests run on Microsoft.Testing.Platform** (`global.json` `test.runner`), as required by xUnit v3 on the .NET 10 SDK.
 - **Startup seeding takes a Postgres advisory lock**, so several API instances starting at once cannot race to create the first PlatformAdmin. The integration tests found this race.
 - **Strict JSON:** unknown request properties are rejected (400) everywhere.
@@ -258,6 +258,15 @@ All workers are `BackgroundService`s inside the API host, safe to run on multipl
 - **The matching engine is pure** (`ReconciliationEngine`): lists in, verdicts out. Persistence, fingerprints and the exception upsert live in `ReconciliationService`, under a per-statement advisory lock.
 - **Cross-module foreign keys** (payments/refunds → settlement batches, batches → merchants, items → payments) are added in the migration's SQL, as in earlier phases, because module models cannot reference each other's types.
 
+### Phase 8 notes
+
+- **Reporting reads other modules' tables, read-only.** It is the one exception to "modules talk through contracts" (ADR 021): reports aggregate across payments, refunds, settlement, reconciliation and webhooks, and going through contracts would mean loading rows to count them. It owns no tables, writes nothing, and caches results in Redis for 60 s (failing open, like the API key cache).
+- **Dashboard delivery.** An unprivileged nginx container serves the Angular build; Caddy routes `/api`, `/v1` and `/health` to the API and everything else to nginx, so the dashboard and its API share one origin and the session cookie stays same-site. nginx sends a CSP with `script-src 'self'` and no inline scripts (critical-CSS inlining is turned off for that reason), plus `nosniff`, `Referrer-Policy: same-origin` and `frame-ancestors 'none'`. Hashed assets are cached for a year; `index.html` is never cached.
+- **Money in the browser stays decimal.** Amounts arrive as strings and are formatted, compared and validated as strings or BigInt minor units; they become JavaScript numbers only as chart coordinates.
+- **Zoneless Angular with signals.** Every data view goes through one `loadable()` helper and the `pf-state` component, so loading, empty and error (with correlation id and retry) look the same everywhere, and a late response never overwrites a newer one.
+- **Refunds from the dashboard** generate one `Idempotency-Key` per dialog and reuse it on every retry. The refund button is shown to merchant users only, matching the API (platform admins cannot refund on a merchant's behalf).
+- **Local preview without trusting the CA.** `npm run start:gateway` serves on `http://localhost:4200` and proxies to the gateway, verifying it against Caddy's root certificate; TLS checks are never disabled.
+
 ## 11. Architecture decision log
 
 | ADR | Decision | Status |
@@ -282,3 +291,5 @@ All workers are `BackgroundService`s inside the API host, safe to run on multipl
 | 018 | SSRF guard at save time and at connect time (resolved address), no redirects | Accepted |
 | 019 | Settlement composed per merchant/currency under an advisory lock, with database uniqueness as the guarantee; deficits carried forward, never paid negative | Accepted |
 | 020 | Reconciliation exceptions keyed by a deterministic fingerprint; runs and results kept as immutable evidence; adjustments only through reconciliation suspense | Accepted |
+| 021 | Reporting as read-only SQL across module schemas, cached in Redis for 60 s | Accepted |
+| 022 | Dashboard served by unprivileged nginx behind the Caddy gateway on one origin, with a strict script CSP | Accepted |
