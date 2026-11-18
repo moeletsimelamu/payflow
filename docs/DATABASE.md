@@ -179,24 +179,26 @@ Account balances are computed from postings (indexed by `account_id`); a cached 
 **`batches`**
 `id`, `public_id` (`stl_`), `merchant_id`, `currency`, `cutoff_at`, `status CHECK IN ('Pending','Paid','Failed')`,
 `gross_payments`, `total_fees`, `total_refunds`, `carried_forward_in`, `net_amount`, `payout_amount`, `carried_forward_out` (all `numeric(19,4)`),
-`created_at`, `created_by`, `paid_at`, `failure_reason`, `idempotency_key`.
-Checks: `payout_amount >= 0`, `carried_forward_out <= 0`, `payout_amount + carried_forward_out = net_amount`.
-Partial UNIQUE `(merchant_id, currency) WHERE status = 'Pending'` — only one open batch per merchant/currency.
+`created_at`, `created_by`, `paid_at`, `payout_reference`, `failure_reason`, `payout_attempts`, `xmin`.
+Checks: `net_amount = gross_payments − total_fees − total_refunds + carried_forward_in`, `payout_amount >= 0`, `carried_forward_in <= 0`, `carried_forward_out <= 0`, `payout_amount + carried_forward_out = net_amount`, at least one item.
+Partial UNIQUE `(merchant_id, currency) WHERE status <> 'Paid'` — only one unpaid (Pending or Failed) batch per merchant/currency, which keeps the carry-forward chain linear. Never deleted. FKs to `merchants.merchants` and `platform.currencies`.
+`payments.payments.settlement_batch_id` and `refunds.refunds.settlement_batch_id` (FK, null until settled) mark what is settled; partial indexes on `(merchant_id, currency, completed_at) WHERE settlement_batch_id IS NULL` find what is not.
 
-**`items`** — `id`, `batch_id FK`, `item_type CHECK IN ('Payment','Refund')` (reversed payments are never settled — see PAYMENT_LIFECYCLE.md R8), `source_id`, `gross_amount`, `fee_amount`, `net_amount`.
+**`items`** (append-only) — `id`, `batch_id FK`, `item_type CHECK IN ('Payment','Refund')` (reversed payments are never settled — see PAYMENT_LIFECYCLE.md R8), `source_id`, `payment_id FK`, `gross_amount`, `fee_amount`, `net_amount` (signed: refunds are negative), `completed_at`.
 **UNIQUE `(item_type, source_id)`** → a transaction can never be settled twice, regardless of application bugs or concurrent runs.
 
 ### `reconciliation`
 
 **`statements`** — `id`, `public_id` (`stmt_`), `source_name`, `period_start`, `period_end`, `file_name`, `file_sha256 bytea UNIQUE`, `line_count`, `imported_by`, `imported_at`, `status` (`Imported`,`Reconciled`).
 
-**`statement_lines`** (append-only) — `id`, `statement_id`, `line_number`, `external_id`, `payflow_reference null`, `transaction_type` (`PAYMENT`,`REFUND`), `amount`, `currency`, `external_status`, `value_date`, `raw jsonb`, `parse_errors jsonb null`. UNIQUE `(statement_id, line_number)`.
+**`statement_lines`** (append-only) — `id`, `statement_id`, `line_number`, `external_id`, `reference`, `transaction_type` (`PAYMENT`,`REFUND`), `amount > 0`, `currency`, `external_status`, `value_date`, `raw` (the line as received). UNIQUE `(statement_id, line_number)`. A file with any invalid line is rejected whole, so no parse errors are ever stored.
 
-**`runs`** — `id`, `statement_id`, `started_at`, `completed_at`, `started_by`, counts per outcome.
+**`runs`** (never deleted) — `id` (`rcr_`), `statement_id`, `started_at`, `completed_at`, `started_by`, counts per outcome, `exceptions_created`. `statements.last_run_id` points to the latest.
 
-**`results`** — `id`, `run_id`, `statement_line_id null`, `internal_type null`, `internal_id null`, `outcome` (`Matched`,`MissingExternal`,`MissingInternal`,`AmountMismatch`,`CurrencyMismatch`,`DuplicateExternal`,`StatusDiscrepancy`), `internal_amount`, `external_amount`, `details jsonb`.
+**`results`** (append-only) — `id`, `run_id`, `statement_line_id null`, `line_number`, `internal_type null`, `internal_id null`, `outcome` (`Matched`,`MissingExternal`,`MissingInternal`,`AmountMismatch`,`CurrencyMismatch`,`DuplicateExternal`,`StatusDiscrepancy`), `reference`, `external_id`, internal and external amount, currency and status, `detail`.
 
-**`exceptions`** — `id`, `public_id` (`rex_`), `fingerprint bytea UNIQUE` (hash of outcome + internal id + external id → reruns never duplicate), `outcome`, `statement_id`, `latest_result_id`, `status CHECK IN ('Open','InReview','Resolved','Dismissed')`, `assigned_to`, `resolution_type` (`AcceptedExternal`,`AcceptedInternal`,`AdjustmentPosted`,`ExternalCorrectionRequested`,`FalsePositive`), `resolution_note`, `resolved_by`, `resolved_at`, `created_at`, `xmin`.
+**`exceptions`** (never deleted) — `id`, `public_id` (`rex_`), `fingerprint bytea UNIQUE` (SHA-256 of statement, outcome, internal id and line reference → reruns never duplicate; see RECONCILIATION.md §4), `outcome <> 'Matched'`, `statement_id`, `latest_result_id`, reference, external id, internal type/id, internal and external amount and currency, `detail`, `status CHECK IN ('Open','InReview','Resolved','Dismissed')`, `assigned_to`, `resolution_type` (`AcceptedExternal`,`AcceptedInternal`,`AdjustmentPosted`,`ExternalCorrectionRequested`,`FalsePositive`), `resolution_note`, `adjustment_amount`, `adjustment_direction`, `resolved_by`, `resolved_at`, `times_seen`, `created_at`, `updated_at`, `xmin`.
+Checks: closed ⇔ resolution type, note, actor and time are all set; `AdjustmentPosted` ⇔ a positive adjustment amount and a direction.
 **`exception_history`** (append-only) — status changes and comments.
 
 ### `audit`
@@ -237,4 +239,5 @@ the API as `payflow_app`, so these guarantees are tested, not assumed.
 | `merchants` | `merchants`, `merchant_currencies`, `fee_plans` + `fee_plan_currency_terms` (append-only, Standard v1 seeded), `api_keys`; deferred FK from `identity.merchant_memberships` | 3 ☑ |
 | `refunds` | `refunds` (status checks, `completed_at` iff final, unique key per merchant, no delete), `reversals` (one per payment, immutable, no delete); FKs to payments and merchants; `payments.payments` now also rejects delete | 5 ☑ |
 | `webhooks` | `endpoints` (secret AES-GCM encrypted, no delete), `events` (immutable, body stored as text, unique per outbox message), `deliveries` (one per event and endpoint, no delete), `delivery_attempts` (immutable) | 6 ☑ |
-| `settlement`, `reconciliation` | — | 7 |
+| `settlement` | `batches` (arithmetic checks, one unpaid per merchant/currency, no delete), `items` (immutable, unique per payment/refund); `settlement_batch_id` FKs on payments and refunds | 7 ☑ |
+| `reconciliation` | `statements` (unique file hash, no delete), `statement_lines` and `results` (immutable), `runs` (no delete), `exceptions` (unique fingerprint, resolution checks, no delete), `exception_history` (immutable) | 7 ☑ |

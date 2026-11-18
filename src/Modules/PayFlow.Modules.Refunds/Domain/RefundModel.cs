@@ -45,6 +45,24 @@ internal sealed class Refund
 
     public uint Version { get; private set; }
 
+    /// <summary>The settlement batch that netted this refund off a payout; null until settled.</summary>
+    public Guid? SettlementBatchId { get; private set; }
+
+    public void MarkSettled(Guid batchId)
+    {
+        if (Status != RefundStatus.Succeeded)
+        {
+            throw new DomainException(Error.Unprocessable("refund_not_settleable", $"A {Status} refund cannot be settled."));
+        }
+
+        if (SettlementBatchId is not null)
+        {
+            throw new DomainException(Error.Conflict("refund_already_settled", "This refund is already in a settlement batch."));
+        }
+
+        SettlementBatchId = batchId;
+    }
+
     public static Refund Request(Guid id, Guid paymentId, Guid merchantId, decimal amount, string currency, string? reason, string paymentMethod, string idempotencyKey, Actor actor, DateTimeOffset now) => new()
     {
         Id = id,

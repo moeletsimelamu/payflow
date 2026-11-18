@@ -6,7 +6,9 @@ using PayFlow.Modules.Identity;
 using PayFlow.Modules.Ledger;
 using PayFlow.Modules.Merchants;
 using PayFlow.Modules.Payments;
+using PayFlow.Modules.Reconciliation;
 using PayFlow.Modules.Refunds;
+using PayFlow.Modules.Settlement;
 using PayFlow.Modules.Webhooks;
 using PayFlow.SharedKernel.Security;
 using Serilog;
@@ -24,6 +26,8 @@ builder.Services
     .AddPaymentsModule()
     .AddRefundsModule()
     .AddWebhooksModule(builder.Configuration)
+    .AddSettlementModule()
+    .AddReconciliationModule()
     .AddScoped<IActorContext, HttpActorContext>()
     .AddPayFlowApi(builder.Configuration);
 
@@ -44,6 +48,8 @@ app.MapMerchantsDashboard();
 app.MapPaymentsDashboard();
 app.MapRefundsDashboard();
 app.MapWebhooksDashboard();
+app.MapSettlementEndpoints();
+app.MapReconciliationEndpoints();
 
 var merchantApi = app.MapMerchantApiGroup();
 merchantApi.MapMerchantsApi();

@@ -29,7 +29,14 @@ public static class PaymentScenario
     }
 
     public static object Body(string amount = "100.00", string currency = "ZAR", string method = "sim_card_success", string? reference = null, string? description = null) =>
-        new { amount, currency, paymentMethod = method, merchantReference = reference ?? $"order-{Guid.NewGuid():N}"[..20], description };
+        new { amount, currency, paymentMethod = method, merchantReference = reference ?? UniqueReference(), description };
+
+    /// <summary>
+    /// A random reference with no digits: random hex occasionally forms a 13+ digit, Luhn-valid run,
+    /// which the card-number guard rightly rejects (<c>card_data_not_accepted</c>).
+    /// </summary>
+    public static string UniqueReference() =>
+        "order-" + string.Concat(Guid.NewGuid().ToString("N")[..14].Select(c => char.IsAsciiDigit(c) ? (char)('g' + (c - '0')) : c));
 
     public static async Task<HttpResponseMessage> CreateAsync(HttpClient api, object body, string? idempotencyKey)
     {

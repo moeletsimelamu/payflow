@@ -250,6 +250,14 @@ All workers are `BackgroundService`s inside the API host, safe to run on multipl
 - **Master key** (`Security:MasterKey`, AES-256-GCM, `SecretProtector`) encrypts webhook signing secrets and every Data Protection key (custom `IXmlEncryptor`). This completes the item deferred from Phase 2. At startup, keys stored in plaintext by earlier versions are revoked and replaced by an encrypted key (sessions end once). Verified on the Compose database.
 - **Payment completion race fixed.** `PaymentProcessor` now row-locks and re-reads the payment before completing or resolving it. Previously the recovery job and a slow original request could both complete the same payment; the ledger's unique index stopped the double posting, but the loser crashed. The webhook tests exposed this, and a regression test reproduces it (it fails without the fix).
 
+### Phase 7 notes
+
+- **Settlement and Reconciliation are modules of their own** and read Payments and Refunds only through contracts: `IPaymentSettlementFeed` / `IRefundSettlementFeed` (list targets, lock unsettled rows `FOR UPDATE`, mark settled) and `IPaymentLookup` / `IRefundLookup` (read-only records for matching). Payments and Refunds remain the only writers of their rows; `settlement_batch_id` is set through their aggregates.
+- **`ISettlementLookup` is now real.** `AddSettlementModule` replaces the Phase 5 placeholder, so reversals check `settlement.items`. The payment aggregate also refuses to reverse once its own `settlement_batch_id` is set.
+- **One transaction per merchant and currency.** A run discovers targets, then composes each in its own DI scope behind a transaction-scoped advisory lock. The unique `(item_type, source_id)` index and the one-unpaid-batch index are the final guards, so a run is safe even across instances.
+- **The matching engine is pure** (`ReconciliationEngine`): lists in, verdicts out. Persistence, fingerprints and the exception upsert live in `ReconciliationService`, under a per-statement advisory lock.
+- **Cross-module foreign keys** (payments/refunds → settlement batches, batches → merchants, items → payments) are added in the migration's SQL, as in earlier phases, because module models cannot reference each other's types.
+
 ## 11. Architecture decision log
 
 | ADR | Decision | Status |
@@ -272,3 +280,5 @@ All workers are `BackgroundService`s inside the API host, safe to run on multipl
 | 016 | Outbox dispatch with SKIP LOCKED claims and an inbox table; at-least-once webhooks with event-id de-duplication | Accepted |
 | 017 | AES-256-GCM master key for recoverable secrets and the Data Protection key ring | Accepted |
 | 018 | SSRF guard at save time and at connect time (resolved address), no redirects | Accepted |
+| 019 | Settlement composed per merchant/currency under an advisory lock, with database uniqueness as the guarantee; deficits carried forward, never paid negative | Accepted |
+| 020 | Reconciliation exceptions keyed by a deterministic fingerprint; runs and results kept as immutable evidence; adjustments only through reconciliation suspense | Accepted |

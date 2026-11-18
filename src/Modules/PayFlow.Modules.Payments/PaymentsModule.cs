@@ -22,6 +22,9 @@ public static class PaymentsModule
         services.AddScoped<PaymentProcessor>();
         services.AddScoped<PaymentQueries>();
         services.AddScoped<PayFlow.Modules.Payments.Contracts.IPaymentRefundOperations, PaymentRefundOperations>();
+        services.AddScoped<PaymentSettlementFeed>();
+        services.AddScoped<PayFlow.Modules.Payments.Contracts.IPaymentSettlementFeed>(sp => sp.GetRequiredService<PaymentSettlementFeed>());
+        services.AddScoped<PayFlow.Modules.Payments.Contracts.IPaymentLookup>(sp => sp.GetRequiredService<PaymentSettlementFeed>());
         services.AddValidatorsFromAssemblyContaining<CreatePaymentRequestValidator>(ServiceLifetime.Scoped, includeInternalTypes: true);
         services.AddRecurringJob<PendingPaymentsJob>(o => o.PendingPaymentsInterval);
         services.AddRecurringJob<ProcessingRecoveryJob>(o => o.ProcessingRecoveryInterval);

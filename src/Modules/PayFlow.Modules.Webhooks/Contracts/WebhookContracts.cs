@@ -17,6 +17,7 @@ public static class WebhookEventTypes
         "payment.reversed",
         "refund.succeeded",
         "refund.failed",
+        "settlement.paid",
     };
 
     public static IReadOnlySet<string> Subscribable { get; } = new HashSet<string>(Deliverable.Append(Ping).Append(All), StringComparer.Ordinal);

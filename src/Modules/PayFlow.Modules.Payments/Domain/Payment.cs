@@ -91,6 +91,25 @@ internal sealed class Payment
 
     public uint Version { get; private set; }
 
+    /// <summary>The settlement batch that paid this payment out to the merchant; null until settled (rule S5).</summary>
+    public Guid? SettlementBatchId { get; private set; }
+
+    /// <summary>Rule S2/S5: only captured payments settle, and only once.</summary>
+    public void MarkSettled(Guid batchId)
+    {
+        if (!PaymentStateMachine.IsCaptured(Status) || Status == PaymentStatus.Reversed)
+        {
+            throw new DomainException(Error.Unprocessable("payment_not_settleable", $"A {Status} payment cannot be settled."));
+        }
+
+        if (SettlementBatchId is not null)
+        {
+            throw new DomainException(Error.Conflict("payment_already_settled", "This payment is already in a settlement batch."));
+        }
+
+        SettlementBatchId = batchId;
+    }
+
     public IReadOnlyList<PaymentStatusChange> History => _history;
 
     public Money AmountMoney => Money.Of(Amount, Currency);
@@ -224,7 +243,7 @@ internal sealed class Payment
             { Status: not PaymentStatus.Succeeded } => $"the payment is {Status}",
             { RefundedAmount: > 0m } => "it has been refunded",
             { PendingRefundAmount: > 0m } => "a refund is in progress",
-            _ when isSettled => "it has already been settled",
+            _ when isSettled || SettlementBatchId is not null => "it has already been settled",
             _ => null,
         };
         if (blocker is not null)

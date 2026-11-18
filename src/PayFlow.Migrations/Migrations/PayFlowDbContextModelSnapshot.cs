@@ -1200,6 +1200,10 @@ namespace PayFlow.Migrations.Migrations
                         .HasColumnType("numeric(19,4)")
                         .HasColumnName("refunded_amount");
 
+                    b.Property<Guid?>("SettlementBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("settlement_batch_id");
+
                     b.Property<DateTimeOffset?>("SimulatedResolveAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("simulated_resolve_at");
@@ -1222,6 +1226,9 @@ namespace PayFlow.Migrations.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_payments");
+
+                    b.HasIndex("CompletedAt")
+                        .HasDatabaseName("ix_payments_completed_at");
 
                     b.HasIndex("Currency")
                         .HasDatabaseName("ix_payments_currency");
@@ -1250,6 +1257,10 @@ namespace PayFlow.Migrations.Migrations
 
                     b.HasIndex("Status", "FailureCode")
                         .HasDatabaseName("ix_payments_status_failure_code");
+
+                    b.HasIndex("MerchantId", "Currency", "CompletedAt")
+                        .HasDatabaseName("ix_payments_unsettled")
+                        .HasFilter("settlement_batch_id IS NULL");
 
                     b.ToTable("payments", "payments", t =>
                         {
@@ -1329,6 +1340,522 @@ namespace PayFlow.Migrations.Migrations
                     b.ToTable("payment_status_history", "payments");
                 });
 
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ExceptionHistoryEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("actor");
+
+                    b.Property<Guid>("ExceptionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("exception_id");
+
+                    b.Property<string>("FromStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("from_status");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_exception_history");
+
+                    b.HasIndex("ExceptionId", "OccurredAt")
+                        .HasDatabaseName("ix_exception_history_exception_id_occurred_at");
+
+                    b.ToTable("exception_history", "reconciliation");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ReconciliationException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("AdjustmentAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("adjustment_amount");
+
+                    b.Property<string>("AdjustmentDirection")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("adjustment_direction");
+
+                    b.Property<string>("AssignedTo")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("assigned_to");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("detail");
+
+                    b.Property<decimal?>("ExternalAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("external_amount");
+
+                    b.Property<string>("ExternalCurrency")
+                        .HasColumnType("char(3)")
+                        .HasColumnName("external_currency");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("external_id");
+
+                    b.Property<byte[]>("Fingerprint")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("fingerprint");
+
+                    b.Property<decimal?>("InternalAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("internal_amount");
+
+                    b.Property<string>("InternalCurrency")
+                        .HasColumnType("char(3)")
+                        .HasColumnName("internal_currency");
+
+                    b.Property<Guid?>("InternalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("internal_id");
+
+                    b.Property<string>("InternalType")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("internal_type");
+
+                    b.Property<long>("LatestResultId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("latest_result_id");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("outcome");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<string>("ResolutionType")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("resolution_type");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("ResolvedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("resolved_by");
+
+                    b.Property<Guid>("StatementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("statement_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TimesSeen")
+                        .HasColumnType("integer")
+                        .HasColumnName("times_seen");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_exceptions");
+
+                    b.HasIndex("Fingerprint")
+                        .IsUnique()
+                        .HasDatabaseName("ix_exceptions_fingerprint");
+
+                    b.HasIndex("LatestResultId")
+                        .HasDatabaseName("ix_exceptions_latest_result_id");
+
+                    b.HasIndex("StatementId")
+                        .HasDatabaseName("ix_exceptions_statement_id");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_exceptions_status_created_at");
+
+                    b.ToTable("exceptions", "reconciliation", t =>
+                        {
+                            t.HasCheckConstraint("ck_exceptions_adjustment", "(resolution_type IS NOT DISTINCT FROM 'AdjustmentPosted') = (adjustment_amount IS NOT NULL AND adjustment_amount > 0 AND adjustment_direction IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_exceptions_currency", "internal_currency IS NOT NULL OR external_currency IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_exceptions_outcome", "outcome IN ('Matched', 'MissingExternal', 'MissingInternal', 'AmountMismatch', 'CurrencyMismatch', 'DuplicateExternal', 'StatusDiscrepancy') AND outcome <> 'Matched'");
+
+                            t.HasCheckConstraint("ck_exceptions_resolution", "(status IN ('Resolved', 'Dismissed')) = (resolution_type IS NOT NULL AND resolution_note IS NOT NULL AND resolved_by IS NOT NULL AND resolved_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_exceptions_status", "status IN ('Open', 'InReview', 'Resolved', 'Dismissed')");
+                        });
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ReconciliationResult", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("detail");
+
+                    b.Property<decimal?>("ExternalAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("external_amount");
+
+                    b.Property<string>("ExternalCurrency")
+                        .HasColumnType("char(3)")
+                        .HasColumnName("external_currency");
+
+                    b.Property<string>("ExternalId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("external_id");
+
+                    b.Property<string>("ExternalStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("external_status");
+
+                    b.Property<decimal?>("InternalAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("internal_amount");
+
+                    b.Property<string>("InternalCurrency")
+                        .HasColumnType("char(3)")
+                        .HasColumnName("internal_currency");
+
+                    b.Property<Guid?>("InternalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("internal_id");
+
+                    b.Property<string>("InternalStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("internal_status");
+
+                    b.Property<string>("InternalType")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("internal_type");
+
+                    b.Property<int?>("LineNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_number");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("outcome");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("run_id");
+
+                    b.Property<long?>("StatementLineId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("statement_line_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_results");
+
+                    b.HasIndex("StatementLineId")
+                        .HasDatabaseName("ix_results_statement_line_id");
+
+                    b.HasIndex("RunId", "Outcome")
+                        .HasDatabaseName("ix_results_run_id_outcome");
+
+                    b.ToTable("results", "reconciliation", t =>
+                        {
+                            t.HasCheckConstraint("ck_results_outcome", "outcome IN ('Matched', 'MissingExternal', 'MissingInternal', 'AmountMismatch', 'CurrencyMismatch', 'DuplicateExternal', 'StatusDiscrepancy')");
+                        });
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ReconciliationRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AmountMismatch")
+                        .HasColumnType("integer")
+                        .HasColumnName("amount_mismatch");
+
+                    b.Property<DateTimeOffset>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<int>("CurrencyMismatch")
+                        .HasColumnType("integer")
+                        .HasColumnName("currency_mismatch");
+
+                    b.Property<int>("DuplicateExternal")
+                        .HasColumnType("integer")
+                        .HasColumnName("duplicate_external");
+
+                    b.Property<int>("ExceptionsCreated")
+                        .HasColumnType("integer")
+                        .HasColumnName("exceptions_created");
+
+                    b.Property<int>("Matched")
+                        .HasColumnType("integer")
+                        .HasColumnName("matched");
+
+                    b.Property<int>("MissingExternal")
+                        .HasColumnType("integer")
+                        .HasColumnName("missing_external");
+
+                    b.Property<int>("MissingInternal")
+                        .HasColumnType("integer")
+                        .HasColumnName("missing_internal");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("StartedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("started_by");
+
+                    b.Property<Guid>("StatementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("statement_id");
+
+                    b.Property<int>("StatusDiscrepancy")
+                        .HasColumnType("integer")
+                        .HasColumnName("status_discrepancy");
+
+                    b.HasKey("Id")
+                        .HasName("pk_runs");
+
+                    b.HasIndex("StatementId", "StartedAt")
+                        .HasDatabaseName("ix_runs_statement_id_started_at");
+
+                    b.ToTable("runs", "reconciliation");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.Statement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("file_name");
+
+                    b.Property<byte[]>("FileSha256")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("file_sha256");
+
+                    b.Property<DateTimeOffset>("ImportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("imported_at");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("imported_by");
+
+                    b.Property<Guid?>("LastRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_run_id");
+
+                    b.Property<int>("LineCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_count");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("date")
+                        .HasColumnName("period_end");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date")
+                        .HasColumnName("period_start");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("source_name");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_statements");
+
+                    b.HasIndex("FileSha256")
+                        .IsUnique()
+                        .HasDatabaseName("ix_statements_file_sha256");
+
+                    b.HasIndex("ImportedAt")
+                        .HasDatabaseName("ix_statements_imported_at");
+
+                    b.ToTable("statements", "reconciliation", t =>
+                        {
+                            t.HasCheckConstraint("ck_statements_period", "period_end >= period_start");
+
+                            t.HasCheckConstraint("ck_statements_status", "status IN ('Imported', 'Reconciled')");
+                        });
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.StatementLine", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("external_id");
+
+                    b.Property<string>("ExternalStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("external_status");
+
+                    b.Property<int>("LineNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("line_number");
+
+                    b.Property<string>("Raw")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("raw");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference");
+
+                    b.Property<Guid>("StatementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("statement_id");
+
+                    b.Property<string>("TransactionType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("transaction_type");
+
+                    b.Property<DateOnly>("ValueDate")
+                        .HasColumnType("date")
+                        .HasColumnName("value_date");
+
+                    b.HasKey("Id")
+                        .HasName("pk_statement_lines");
+
+                    b.HasIndex("StatementId", "LineNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_statement_lines_statement_id_line_number");
+
+                    b.ToTable("statement_lines", "reconciliation", t =>
+                        {
+                            t.HasCheckConstraint("ck_statement_lines_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_statement_lines_type", "transaction_type IN ('PAYMENT', 'REFUND')");
+                        });
+                });
+
             modelBuilder.Entity("PayFlow.Modules.Refunds.Domain.Refund", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1395,6 +1922,10 @@ namespace PayFlow.Migrations.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("requested_by_type");
 
+                    b.Property<Guid?>("SettlementBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("settlement_batch_id");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -1410,6 +1941,9 @@ namespace PayFlow.Migrations.Migrations
                     b.HasKey("Id")
                         .HasName("pk_refunds");
 
+                    b.HasIndex("CompletedAt")
+                        .HasDatabaseName("ix_refunds_completed_at");
+
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_refunds_pending")
                         .HasFilter("status = 'Pending'");
@@ -1423,6 +1957,10 @@ namespace PayFlow.Migrations.Migrations
 
                     b.HasIndex("PaymentId", "CreatedAt")
                         .HasDatabaseName("ix_refunds_payment_id_created_at");
+
+                    b.HasIndex("MerchantId", "Currency", "CompletedAt")
+                        .HasDatabaseName("ix_refunds_unsettled")
+                        .HasFilter("settlement_batch_id IS NULL AND status = 'Succeeded'");
 
                     b.ToTable("refunds", "refunds", t =>
                         {
@@ -1512,6 +2050,200 @@ namespace PayFlow.Migrations.Migrations
                             t.HasCheckConstraint("ck_reversals_amount", "amount > 0");
 
                             t.HasCheckConstraint("ck_reversals_fee", "fee_returned >= 0 AND fee_returned < amount");
+                        });
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Settlement.Domain.SettlementBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("CarriedForwardIn")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("carried_forward_in");
+
+                    b.Property<decimal>("CarriedForwardOut")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("carried_forward_out");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<DateTimeOffset>("CutoffAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cutoff_at");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("failure_reason");
+
+                    b.Property<decimal>("GrossPayments")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("gross_payments");
+
+                    b.Property<Guid>("MerchantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("merchant_id");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("net_amount");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<int>("PaymentCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("payment_count");
+
+                    b.Property<decimal>("PayoutAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("payout_amount");
+
+                    b.Property<int>("PayoutAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("payout_attempts");
+
+                    b.Property<string>("PayoutReference")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("payout_reference");
+
+                    b.Property<int>("RefundCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("refund_count");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalFees")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("total_fees");
+
+                    b.Property<decimal>("TotalRefunds")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("total_refunds");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_batches");
+
+                    b.HasIndex("Currency")
+                        .HasDatabaseName("ix_batches_currency");
+
+                    b.HasIndex("MerchantId", "Currency")
+                        .IsUnique()
+                        .HasDatabaseName("ux_batches_one_open")
+                        .HasFilter("status <> 'Paid'");
+
+                    b.HasIndex("MerchantId", "Currency", "CreatedAt")
+                        .HasDatabaseName("ix_batches_merchant_id_currency_created_at");
+
+                    b.ToTable("batches", "settlement", t =>
+                        {
+                            t.HasCheckConstraint("ck_batches_counts", "payment_count >= 0 AND refund_count >= 0 AND payment_count + refund_count > 0");
+
+                            t.HasCheckConstraint("ck_batches_net", "net_amount = gross_payments - total_fees - total_refunds + carried_forward_in");
+
+                            t.HasCheckConstraint("ck_batches_payout", "payout_amount >= 0 AND carried_forward_out <= 0 AND carried_forward_in <= 0 AND payout_amount + carried_forward_out = net_amount");
+
+                            t.HasCheckConstraint("ck_batches_status", "status IN ('Pending', 'Paid', 'Failed')");
+                        });
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Settlement.Domain.SettlementItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("batch_id");
+
+                    b.Property<DateTimeOffset>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<decimal>("FeeAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("fee_amount");
+
+                    b.Property<decimal>("GrossAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("gross_amount");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("item_type");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasPrecision(19, 4)
+                        .HasColumnType("numeric(19,4)")
+                        .HasColumnName("net_amount");
+
+                    b.Property<Guid>("PaymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_id");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_items");
+
+                    b.HasIndex("BatchId")
+                        .HasDatabaseName("ix_items_batch_id");
+
+                    b.HasIndex("PaymentId")
+                        .HasDatabaseName("ix_items_payment_id");
+
+                    b.HasIndex("ItemType", "SourceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_items_item_type_source_id");
+
+                    b.ToTable("items", "settlement", t =>
+                        {
+                            t.HasCheckConstraint("ck_items_type", "item_type IN ('Payment', 'Refund')");
                         });
                 });
 
@@ -1953,6 +2685,69 @@ namespace PayFlow.Migrations.Migrations
                         .HasConstraintName("fk_payment_status_history_payments_payment_id");
                 });
 
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ExceptionHistoryEntry", b =>
+                {
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.ReconciliationException", null)
+                        .WithMany()
+                        .HasForeignKey("ExceptionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exception_history_exceptions_exception_id");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ReconciliationException", b =>
+                {
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.ReconciliationResult", null)
+                        .WithMany()
+                        .HasForeignKey("LatestResultId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exceptions_results_latest_result_id");
+
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.Statement", null)
+                        .WithMany()
+                        .HasForeignKey("StatementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_exceptions_statements_statement_id");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ReconciliationResult", b =>
+                {
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.ReconciliationRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_results_runs_run_id");
+
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.StatementLine", null)
+                        .WithMany()
+                        .HasForeignKey("StatementLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_results_statement_lines_statement_line_id");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.ReconciliationRun", b =>
+                {
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.Statement", null)
+                        .WithMany()
+                        .HasForeignKey("StatementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_runs_statements_statement_id");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Reconciliation.Domain.StatementLine", b =>
+                {
+                    b.HasOne("PayFlow.Modules.Reconciliation.Domain.Statement", null)
+                        .WithMany()
+                        .HasForeignKey("StatementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_statement_lines_statements_statement_id");
+                });
+
             modelBuilder.Entity("PayFlow.Modules.Refunds.Domain.Refund", b =>
                 {
                     b.HasOne("PayFlow.Infrastructure.Persistence.CurrencyRecord", null)
@@ -1971,6 +2766,26 @@ namespace PayFlow.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_reversals_currencies_currency");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Settlement.Domain.SettlementBatch", b =>
+                {
+                    b.HasOne("PayFlow.Infrastructure.Persistence.CurrencyRecord", null)
+                        .WithMany()
+                        .HasForeignKey("Currency")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_batches_currencies_currency");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Settlement.Domain.SettlementItem", b =>
+                {
+                    b.HasOne("PayFlow.Modules.Settlement.Domain.SettlementBatch", null)
+                        .WithMany("Items")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_items_batches_batch_id");
                 });
 
             modelBuilder.Entity("PayFlow.Modules.Webhooks.Domain.DeliveryAttempt", b =>
@@ -2018,6 +2833,11 @@ namespace PayFlow.Migrations.Migrations
             modelBuilder.Entity("PayFlow.Modules.Payments.Domain.Payment", b =>
                 {
                     b.Navigation("History");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Settlement.Domain.SettlementBatch", b =>
+                {
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

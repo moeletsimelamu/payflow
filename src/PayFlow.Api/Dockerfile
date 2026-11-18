@@ -14,6 +14,8 @@ COPY src/Modules/PayFlow.Modules.Merchants/*.csproj src/Modules/PayFlow.Modules.
 COPY src/Modules/PayFlow.Modules.Ledger/*.csproj src/Modules/PayFlow.Modules.Ledger/
 COPY src/Modules/PayFlow.Modules.Payments/*.csproj src/Modules/PayFlow.Modules.Payments/
 COPY src/Modules/PayFlow.Modules.Refunds/*.csproj src/Modules/PayFlow.Modules.Refunds/
+COPY src/Modules/PayFlow.Modules.Settlement/*.csproj src/Modules/PayFlow.Modules.Settlement/
+COPY src/Modules/PayFlow.Modules.Reconciliation/*.csproj src/Modules/PayFlow.Modules.Reconciliation/
 COPY src/Modules/PayFlow.Modules.Webhooks/*.csproj src/Modules/PayFlow.Modules.Webhooks/
 COPY src/PayFlow.Webhooks.Signature/*.csproj src/PayFlow.Webhooks.Signature/
 COPY src/PayFlow.Migrations/*.csproj src/PayFlow.Migrations/

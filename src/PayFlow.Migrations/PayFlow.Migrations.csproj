@@ -14,6 +14,8 @@
     <ProjectReference Include="..\Modules\PayFlow.Modules.Payments\PayFlow.Modules.Payments.csproj" />
     <ProjectReference Include="..\Modules\PayFlow.Modules.Refunds\PayFlow.Modules.Refunds.csproj" />
     <ProjectReference Include="..\Modules\PayFlow.Modules.Webhooks\PayFlow.Modules.Webhooks.csproj" />
+    <ProjectReference Include="..\Modules\PayFlow.Modules.Settlement\PayFlow.Modules.Settlement.csproj" />
+    <ProjectReference Include="..\Modules\PayFlow.Modules.Reconciliation\PayFlow.Modules.Reconciliation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

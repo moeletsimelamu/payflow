@@ -34,6 +34,8 @@ internal sealed class RefundsDbModel : IModuleDbModel
             e.HasIndex(r => new { r.MerchantId, r.IdempotencyKey }).IsUnique();
             e.HasIndex(r => new { r.PaymentId, r.CreatedAt });
             e.HasIndex(r => r.CreatedAt).HasFilter("status = 'Pending'").HasDatabaseName("ix_refunds_pending");
+            e.HasIndex(r => new { r.MerchantId, r.Currency, r.CompletedAt }).HasFilter("settlement_batch_id IS NULL AND status = 'Succeeded'").HasDatabaseName("ix_refunds_unsettled");
+            e.HasIndex(r => r.CompletedAt);
             e.HasOne<CurrencyRecord>().WithMany().HasForeignKey(r => r.Currency).OnDelete(DeleteBehavior.Restrict);
         });
 

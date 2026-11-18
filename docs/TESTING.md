@@ -101,6 +101,21 @@ The factory registers a `CapturingLogSink`, so tests can assert that secrets nev
 | SSRF blocklist | `SsrfGuardTests`: 19-address table (private, loopback, link-local/metadata, CGNAT, multicast, IPv6 ULA/link-local, IPv4-mapped, NAT64); URL policy; the real handler refuses `localhost`/`127.0.0.1` at connect time; integration: unsafe URLs → `400 webhook_url_not_allowed` |
 | Also | Secrets shown once and stored as AES-GCM ciphertext (`SecretProtectorTests`: purpose binding, tamper and wrong-key detection); key ring encrypted; signature values redacted in attempt logs; disabled or unsubscribed endpoints get nothing; tenant isolation for events and deliveries; regression test for the payment completion race |
 
+## Phase 7 exit gate: covered
+
+| Gate item | Tests |
+|---|---|
+| Worked example reproduces ZAR 313.26 | `SettlementComposeTests` (domain arithmetic); `SettlementTests`: payments A, B, C and a 40.00 refund through the API → batch net and payout 313.26, merchant payable 313.26 before payout and 0 after, one `SettlementPaid` entry, one `settlement.paid` outbox message, CSV lines sum to 313.26 |
+| Double run → one batch | 8 parallel runs for one merchant → exactly 1 batch holding all 5 payments; the others skip (`open_batch_exists` / `concurrent_settlement`); a run after payment creates nothing |
+| Deficit carry-forward | Settled payment refunded in full → next batch nets −100.00, pays 0, carries −100.00; the following batch nets 150.00 − 6.35 − 100.00 = 43.65; merchant payable ends at 0 |
+| Every reconciliation outcome from a generated statement | `ReconciliationTests`: one of each injection → exactly 4 Matched and 1 of each of the six discrepancy outcomes, 6 exceptions, each found on the record it was planted on; a faithful statement (including a reversal and a USD payment, with a decline that must not appear) matches everything |
+| Rerun idempotent | Second run → `exceptionsCreated: 0`, `exceptionsSeenAgain: 6`, identical counts, every exception `timesSeen: 2`; closed exceptions stay closed; still one adjustment entry |
+| Also | Matching precedence, duplicates in file order, status mapping table (14 cases), fingerprint stability, amount formatting (`ReconciliationEngineTests`); CSV parsing rejects every bad line at once; duplicate file import → 409; malformed import stores nothing; review → resolve with a `ReconciliationAdjustment` that moves `acquirer_receivable` by exactly the amount; dismissal needs a note; a failed payout posts nothing and is retried once; a settled payment cannot be reversed; tenant isolation and admin-only routes; append-only triggers on the new tables |
+
+Integration tests that need to cross a settlement cut-off run their own host on a `FakeTimeProvider`. Reconciliation tests put their payments on a day of their own, years ahead, because a statement covers every merchant in its period and the database is shared.
+
+Test payment references contain no digits (`PaymentScenario.UniqueReference`). Random hex occasionally formed a 13-digit, Luhn-valid run, which the card-number guard correctly rejected, making webhook tests fail now and then.
+
 ## End-to-end check against Docker Compose
 
 Besides the automated suites, each phase is checked on the real stack (`docker compose up --build`)

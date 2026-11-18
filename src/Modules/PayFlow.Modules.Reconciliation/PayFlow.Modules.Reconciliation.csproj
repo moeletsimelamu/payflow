@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PayFlow.Infrastructure\PayFlow.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\PayFlow.SharedKernel\PayFlow.SharedKernel.csproj" />
+    <ProjectReference Include="..\PayFlow.Modules.Audit\PayFlow.Modules.Audit.csproj" />
+    <ProjectReference Include="..\PayFlow.Modules.Identity\PayFlow.Modules.Identity.csproj" />
+    <ProjectReference Include="..\PayFlow.Modules.Ledger\PayFlow.Modules.Ledger.csproj" />
+    <ProjectReference Include="..\PayFlow.Modules.Payments\PayFlow.Modules.Payments.csproj" />
+    <ProjectReference Include="..\PayFlow.Modules.Refunds\PayFlow.Modules.Refunds.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PayFlow.UnitTests" />
+    <InternalsVisibleTo Include="PayFlow.IntegrationTests" />
+    <InternalsVisibleTo Include="PayFlow.ArchitectureTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
+</Project>

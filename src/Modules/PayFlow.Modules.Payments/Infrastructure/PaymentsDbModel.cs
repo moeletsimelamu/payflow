@@ -48,6 +48,8 @@ internal sealed class PaymentsDbModel : IModuleDbModel
             e.HasIndex(p => p.SimulatedResolveAt).HasFilter("status = 'Pending'").HasDatabaseName("ix_payments_pending_due");
             e.HasIndex(p => p.ProcessingStartedAt).HasFilter("status = 'Processing'").HasDatabaseName("ix_payments_processing");
             e.HasIndex(p => new { p.Status, p.FailureCode });
+            e.HasIndex(p => new { p.MerchantId, p.Currency, p.CompletedAt }).HasFilter("settlement_batch_id IS NULL").HasDatabaseName("ix_payments_unsettled");
+            e.HasIndex(p => p.CompletedAt);
             e.HasOne<CurrencyRecord>().WithMany().HasForeignKey(p => p.Currency).OnDelete(DeleteBehavior.Restrict);
             e.HasMany(p => p.History).WithOne().HasForeignKey(h => h.PaymentId);
             e.Navigation(p => p.History).UsePropertyAccessMode(PropertyAccessMode.Field);

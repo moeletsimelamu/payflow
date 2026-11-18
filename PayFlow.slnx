@@ -12,7 +12,9 @@
     <Project Path="src/Modules/PayFlow.Modules.Ledger/PayFlow.Modules.Ledger.csproj" />
     <Project Path="src/Modules/PayFlow.Modules.Merchants/PayFlow.Modules.Merchants.csproj" />
     <Project Path="src/Modules/PayFlow.Modules.Payments/PayFlow.Modules.Payments.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Reconciliation/PayFlow.Modules.Reconciliation.csproj" />
     <Project Path="src/Modules/PayFlow.Modules.Refunds/PayFlow.Modules.Refunds.csproj" />
+    <Project Path="src/Modules/PayFlow.Modules.Settlement/PayFlow.Modules.Settlement.csproj" />
     <Project Path="src/Modules/PayFlow.Modules.Webhooks/PayFlow.Modules.Webhooks.csproj" />
   </Folder>
   <Folder Name="/tests/">

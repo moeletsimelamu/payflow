@@ -7,7 +7,9 @@ using PayFlow.Modules.Identity;
 using PayFlow.Modules.Ledger;
 using PayFlow.Modules.Merchants;
 using PayFlow.Modules.Payments;
+using PayFlow.Modules.Reconciliation;
 using PayFlow.Modules.Refunds;
+using PayFlow.Modules.Settlement;
 using PayFlow.Modules.Webhooks;
 
 namespace PayFlow.Migrations;
@@ -27,6 +29,8 @@ public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Pay
         PaymentsModule.DbModel,
         RefundsModule.DbModel,
         WebhooksModule.DbModel,
+        SettlementModule.DbModel,
+        ReconciliationModule.DbModel,
     ];
 
     public PayFlowDbContext CreateDbContext(string[] args)
