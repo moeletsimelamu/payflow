@@ -16,6 +16,9 @@ import { Auth } from '../core/auth';
       <section class="pf-card pf-login-card" aria-labelledby="login-title">
         <h1 id="login-title">Sign in to PayFlow</h1>
         <p class="pf-muted">A simulated payments platform. No real money or card data is ever used.</p>
+        @if (accepted) {
+          <p class="pf-notice" role="status">Your password is set. Sign in to continue.</p>
+        }
         @if (expired) {
           <p class="pf-notice" role="status">Your session ended. Sign in again to continue.</p>
         }
@@ -57,6 +60,7 @@ export class LoginPage {
   protected readonly busy = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly expired = this.route.snapshot.queryParamMap.has('expired');
+  protected readonly accepted = this.route.snapshot.queryParamMap.has('accepted');
 
   protected async submit(): Promise<void> {
     if (this.form.invalid) {

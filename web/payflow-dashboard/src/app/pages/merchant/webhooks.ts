@@ -2,11 +2,13 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } fro
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
 import { Api, ApiError } from '../../core/api';
 import { isEmptyPage, loadable } from '../../core/loadable';
-import { Delivery } from '../../core/models';
+import { Delivery, WEBHOOK_EVENT_TYPES, WebhookEndpoint } from '../../core/models';
+import { SecretPanel } from '../../shared/secret-panel';
 import { UtcPipe, WordsPipe } from '../../shared/pipes';
 import { StateView } from '../../shared/state';
 import { StatusBadge } from '../../shared/status-badge';
@@ -14,7 +16,7 @@ import { StatusBadge } from '../../shared/status-badge';
 /** Webhook endpoints and delivery history with every attempt (WH-5). */
 @Component({
   selector: 'pf-webhooks',
-  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatSelectModule, MatPaginatorModule, StateView, StatusBadge, UtcPipe, WordsPipe],
+  imports: [FormsModule, MatButtonModule, MatFormFieldModule, MatInputModule, MatSelectModule, MatPaginatorModule, StateView, StatusBadge, SecretPanel, UtcPipe, WordsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="pf-page-header">
@@ -22,18 +24,57 @@ import { StatusBadge } from '../../shared/status-badge';
       <p class="pf-muted">Signed event notifications to your servers. Delivery is at least once: de-duplicate on the event id.</p>
     </header>
 
+    @if (secret(); as sec) {
+      <pf-secret [title]="'Signing secret for ' + sec.url" [value]="sec.value" notice="Use it to verify the PayFlow-Signature header. It cannot be shown again." (dismissed)="secret.set(null)" />
+    }
+
     <section class="pf-card" aria-labelledby="endpoints">
       <h2 id="endpoints">Endpoints</h2>
-      <pf-state [of]="endpoints" emptyText="No webhook endpoints configured. Add one through the API (POST /api/merchants/{id}/webhook-endpoints).">
-        <ul class="pf-list">
+      <pf-state [of]="endpoints" emptyText="No webhook endpoints yet. Add one below.">
+        <ul class="pf-list pf-endpoints">
           @for (e of endpoints.value(); track e.id) {
             <li>
-              <strong>{{ e.url }}</strong> <pf-status [value]="e.isEnabled ? 'Active' : 'Cancelled'" />
+              <strong class="pf-break">{{ e.url }}</strong> <pf-status [value]="e.isEnabled ? 'Active' : 'Cancelled'" />
               <br /><span class="pf-muted">{{ e.description ?? 'No description' }} · events: {{ e.eventTypes.join(', ') }} · secret ends …{{ e.secretHint }}</span>
+              @if (e.previousSecretExpiresAt) {
+                <br /><span class="pf-muted">The previous secret also signs until {{ e.previousSecretExpiresAt | utc }}.</span>
+              }
+              <div class="pf-actions">
+                <button mat-button type="button" (click)="toggle(e)" [disabled]="busy()">{{ e.isEnabled ? 'Disable' : 'Enable' }}</button>
+                <button mat-button type="button" (click)="roll(e)" [disabled]="busy() || !e.isEnabled">Roll secret</button>
+                <button mat-button type="button" (click)="ping(e)" [disabled]="busy() || !e.isEnabled">Send ping</button>
+              </div>
             </li>
           }
         </ul>
       </pf-state>
+
+      <h3>Add an endpoint</h3>
+      <form (ngSubmit)="create()" aria-label="Add a webhook endpoint">
+        <div class="pf-filters">
+          <mat-form-field appearance="outline" class="pf-wide">
+            <mat-label>HTTPS URL</mat-label>
+            <input matInput name="url" type="url" [ngModel]="url()" (ngModelChange)="url.set($event)" placeholder="https://example.com/payflow/webhooks" required />
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Description (optional)</mat-label>
+            <input matInput name="description" maxlength="200" [ngModel]="description()" (ngModelChange)="description.set($event)" />
+          </mat-form-field>
+        </div>
+        <fieldset class="pf-fieldset">
+          <legend>Events</legend>
+          <label class="pf-check"><input type="checkbox" [checked]="allEvents()" (change)="allEvents.set($any($event.target).checked)" /> All events (<code>*</code>)</label>
+          @if (!allEvents()) {
+            @for (t of eventTypes; track t) {
+              <label class="pf-check"><input type="checkbox" [checked]="chosen().has(t)" (change)="choose(t, $any($event.target).checked)" /> <code>{{ t }}</code></label>
+            }
+          }
+        </fieldset>
+        <button mat-flat-button type="submit" [disabled]="busy()">Add endpoint</button>
+      </form>
+      @if (message(); as m) {
+        <p [class]="failed() ? 'pf-error' : 'pf-notice'" role="status">{{ m }}</p>
+      }
     </section>
 
     <section class="pf-card" aria-labelledby="deliveries">
@@ -65,9 +106,12 @@ import { StatusBadge } from '../../shared/status-badge';
                     <td><pf-status [value]="d.status" />@if (d.nextAttemptAt) { <br /><span class="pf-muted">next {{ d.nextAttemptAt | utc }}</span> }</td>
                     <td class="pf-num">{{ d.attemptCount }}</td>
                     <td>
-                      <button mat-button type="button" (click)="toggle(d)" [attr.aria-expanded]="openId() === d.id" [attr.aria-controls]="'attempts-' + d.id">
+                      <button mat-button type="button" (click)="toggleAttempts(d)" [attr.aria-expanded]="openId() === d.id" [attr.aria-controls]="'attempts-' + d.id">
                         {{ openId() === d.id ? 'Hide attempts' : 'Show attempts' }}
                       </button>
+                      @if (d.status === 'Exhausted' || d.status === 'Succeeded' || d.status === 'Cancelled') {
+                        <button mat-button type="button" (click)="redeliver(d)" [disabled]="busy()">Redeliver</button>
+                      }
                     </td>
                   </tr>
                   @if (openId() === d.id) {
@@ -114,12 +158,107 @@ export class WebhooksPage implements OnInit {
   protected readonly detail = signal<Delivery | null>(null);
   protected readonly attemptsError = signal<string | null>(null);
 
+  protected readonly eventTypes = WEBHOOK_EVENT_TYPES;
+  protected readonly url = signal('');
+  protected readonly description = signal('');
+  protected readonly allEvents = signal(true);
+  protected readonly chosen = signal(new Set<string>());
+  protected readonly secret = signal<{ url: string; value: string } | null>(null);
+  protected readonly busy = signal(false);
+  protected readonly message = signal<string | null>(null);
+  protected readonly failed = signal(false);
+
   protected readonly endpoints = loadable(() => this.api.webhookEndpoints(this.merchantId()), (list) => list.length === 0);
   protected readonly deliveries = loadable(() => this.api.deliveries(this.merchantId(), { status: this.status, page: this.pageIndex() + 1, pageSize: 25 }), isEmptyPage);
 
   ngOnInit(): void {
     void this.endpoints.load();
     void this.deliveries.load();
+  }
+
+  protected choose(type: string, on: boolean): void {
+    const next = new Set(this.chosen());
+    if (on) {
+      next.add(type);
+    } else {
+      next.delete(type);
+    }
+    this.chosen.set(next);
+  }
+
+  protected async create(): Promise<void> {
+    const url = this.url().trim();
+    const eventTypes = this.allEvents() ? ['*'] : [...this.chosen()];
+    // Only a basic shape check here: the API's SSRF guard decides which URLs are allowed (https to a
+    // public host in production; the local demo also allows the http sink on the Compose network).
+    if (!/^https?:\/\/[^\s/]+/i.test(url)) {
+      this.report('Enter a full URL, starting with https://.', true);
+      return;
+    }
+    if (eventTypes.length === 0) {
+      this.report('Choose at least one event.', true);
+      return;
+    }
+    await this.run(async () => {
+      const created = await this.api.createWebhookEndpoint(this.merchantId(), { url, description: this.description().trim() || null, eventTypes });
+      this.secret.set({ url: created.endpoint.url, value: created.secret });
+      this.url.set('');
+      this.description.set('');
+      this.report('Endpoint added.', false);
+    });
+  }
+
+  protected async toggle(e: WebhookEndpoint): Promise<void> {
+    await this.run(async () => {
+      await this.api.updateWebhookEndpoint(this.merchantId(), e.id, { isEnabled: !e.isEnabled });
+      this.report(e.isEnabled ? 'Endpoint disabled; its pending deliveries were cancelled.' : 'Endpoint enabled.', false);
+    });
+  }
+
+  protected async roll(e: WebhookEndpoint): Promise<void> {
+    await this.run(async () => {
+      const rolled = await this.api.rollWebhookSecret(this.merchantId(), e.id);
+      this.secret.set({ url: rolled.endpoint.url, value: rolled.secret });
+      this.report('New secret issued; the old one keeps signing for 24 hours.', false);
+    });
+  }
+
+  protected async ping(e: WebhookEndpoint): Promise<void> {
+    await this.run(async () => {
+      await this.api.pingWebhookEndpoint(this.merchantId(), e.id);
+      this.report('Ping queued; it appears in the delivery history below.', false);
+    });
+  }
+
+  protected async redeliver(d: Delivery): Promise<void> {
+    await this.run(async () => {
+      await this.api.redeliver(this.merchantId(), d.id);
+      this.report(`Redelivery of ${d.eventType} queued with a fresh attempt budget.`, false);
+    });
+  }
+
+  private async run(work: () => Promise<void>): Promise<void> {
+    this.busy.set(true);
+    try {
+      await work();
+      void this.endpoints.load();
+      void this.deliveries.load();
+    } catch (err) {
+      const error = ApiError.from(err);
+      this.report(
+        error.code === 'webhook_url_not_allowed'
+          ? 'That URL is not allowed: it must be https to a public host (no localhost, internal names or private addresses).'
+          : error.message,
+        true,
+      );
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  private report(text: string, failed: boolean): void {
+    this.failed.set(failed);
+    this.message.set(text);
   }
 
   protected apply(): void {
@@ -132,7 +271,7 @@ export class WebhooksPage implements OnInit {
     void this.deliveries.load();
   }
 
-  protected async toggle(d: Delivery): Promise<void> {
+  protected async toggleAttempts(d: Delivery): Promise<void> {
     if (this.openId() === d.id) {
       this.openId.set(null);
       return;

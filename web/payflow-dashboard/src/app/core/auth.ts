@@ -105,6 +105,15 @@ export const platformAdmin: CanActivateFn = async () => {
   return user?.isPlatformAdmin ? true : router.createUrlTree(['/']);
 };
 
+/** Merchant configuration pages (keys, team, webhooks): MerchantAdmins of that merchant and platform admins. */
+export const merchantAdmin: CanActivateFn = async (route) => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  await auth.ensureLoaded();
+  const merchantId = route.parent?.paramMap.get('merchantId') ?? route.paramMap.get('merchantId') ?? '';
+  return auth.isMerchantAdmin(merchantId) ? true : router.createUrlTree(['/no-access']);
+};
+
 /** The UI check mirrors the API's: platform admins and members of the merchant in the route. */
 export const merchantMember: CanActivateFn = async (route) => {
   const auth = inject(Auth);

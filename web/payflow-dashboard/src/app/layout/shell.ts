@@ -44,7 +44,8 @@ export function navFor(
     { label: 'Reports', link: `${base}/reports` },
   ];
   if (isAdmin) {
-    merchant.push({ label: 'Webhooks', link: `${base}/webhooks` }); // endpoint configuration is MerchantAdmin-only
+    // Configuration is MerchantAdmin-only (and platform admins).
+    merchant.push({ label: 'Webhooks', link: `${base}/webhooks` }, { label: 'API keys', link: `${base}/api-keys` }, { label: 'Team', link: `${base}/team` });
   }
   return { platform, merchant };
 }

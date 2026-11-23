@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { Api } from '../../core/api';
+import { Auth } from '../../core/auth';
+import { MerchantAdminPanel } from '../admin/merchant-admin-panel';
 import { isEmptyPage, loadable } from '../../core/loadable';
 import { MoneyPipe, RatePipe, UtcPipe } from '../../shared/pipes';
 import { StateView } from '../../shared/state';
@@ -9,7 +11,7 @@ import { StatusBadge } from '../../shared/status-badge';
 /** The merchant's landing page: profile, last 30 days at a glance, recent payments and settlements. */
 @Component({
   selector: 'pf-merchant-overview',
-  imports: [RouterLink, StateView, StatusBadge, MoneyPipe, RatePipe, UtcPipe],
+  imports: [RouterLink, StateView, StatusBadge, MoneyPipe, RatePipe, UtcPipe, MerchantAdminPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <pf-state [of]="merchant" loadingText="Loading merchant…">
@@ -24,6 +26,9 @@ import { StatusBadge } from '../../shared/status-badge';
             <p class="pf-notice">{{ m.statusReason }}</p>
           }
         </header>
+        @if (isPlatformAdmin()) {
+          <pf-merchant-admin [merchant]="m" (changed)="merchant.load()" />
+        }
       }
     </pf-state>
 
@@ -91,6 +96,7 @@ import { StatusBadge } from '../../shared/status-badge';
 })
 export class MerchantOverviewPage implements OnInit {
   private readonly api = inject(Api);
+  protected readonly isPlatformAdmin = inject(Auth).isPlatformAdmin;
   readonly merchantId = input.required<string>();
   protected readonly currency = 'ZAR';
 

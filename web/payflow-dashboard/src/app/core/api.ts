@@ -2,7 +2,16 @@ import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
+  ApiKey,
   CurrentUser,
+  FeePlan,
+  IssuedApiKey,
+  Member,
+  MemberInvitation,
+  MemberRole,
+  RegisterMerchantRequest,
+  RegisteredMerchant,
+  WebhookSecret,
   Delivery,
   ExceptionStatus,
   GeneratedStatement,
@@ -79,8 +88,12 @@ export class Api {
   }
 
   private async post<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.send<T>('POST', url, body, headers);
+  }
+
+  private async send<T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
     try {
-      return await firstValueFrom(this.http.post<T>(url, body, { headers: new HttpHeaders(headers ?? {}) }));
+      return await firstValueFrom(this.http.request<T>(method, url, { body, headers: new HttpHeaders(headers ?? {}) }));
     } catch (e) {
       throw ApiError.from(e);
     }
@@ -99,6 +112,9 @@ export class Api {
   logout(): Promise<unknown> {
     return this.post('/api/auth/logout', {});
   }
+  acceptInvitation(email: string, token: string, password: string): Promise<unknown> {
+    return this.post('/api/auth/accept-invitation', { email, token, password });
+  }
 
   // Merchants
   merchants(query: { search?: string; status?: string; page?: number; pageSize?: number } = {}): Promise<Page<Merchant>> {
@@ -106,6 +122,44 @@ export class Api {
   }
   merchant(merchantId: string): Promise<Merchant> {
     return this.get(`/api/merchants/${merchantId}`);
+  }
+  registerMerchant(body: RegisterMerchantRequest): Promise<RegisteredMerchant> {
+    return this.post('/api/merchants', body);
+  }
+  changeMerchantStatus(merchantId: string, status: 'Active' | 'Suspended' | 'Closed', reason: string | null): Promise<Merchant> {
+    return this.post(`/api/merchants/${merchantId}/status`, { status, reason });
+  }
+  setCurrencyLimits(merchantId: string, currency: string, body: { maxPaymentAmount: string; operatorRefundLimit: string | null }): Promise<Merchant> {
+    return this.send('PUT', `/api/merchants/${merchantId}/currencies/${currency}`, body);
+  }
+  feePlans(): Promise<FeePlan[]> {
+    return this.get('/api/fee-plans');
+  }
+
+  // API keys and members (MerchantAdmin)
+  apiKeys(merchantId: string): Promise<ApiKey[]> {
+    return this.get(`/api/merchants/${merchantId}/api-keys`);
+  }
+  createApiKey(merchantId: string, name: string): Promise<IssuedApiKey> {
+    return this.post(`/api/merchants/${merchantId}/api-keys`, { name });
+  }
+  rotateApiKey(merchantId: string, keyId: string, gracePeriodHours: number): Promise<IssuedApiKey> {
+    return this.post(`/api/merchants/${merchantId}/api-keys/${keyId}/rotate`, { gracePeriodHours });
+  }
+  revokeApiKey(merchantId: string, keyId: string): Promise<ApiKey> {
+    return this.post(`/api/merchants/${merchantId}/api-keys/${keyId}/revoke`, {});
+  }
+  members(merchantId: string): Promise<Member[]> {
+    return this.get(`/api/merchants/${merchantId}/members`);
+  }
+  inviteMember(merchantId: string, body: { email: string; displayName: string; role: MemberRole }): Promise<MemberInvitation> {
+    return this.post(`/api/merchants/${merchantId}/members`, body);
+  }
+  changeMemberRole(merchantId: string, userId: string, role: MemberRole): Promise<unknown> {
+    return this.send('PATCH', `/api/merchants/${merchantId}/members/${userId}`, { role });
+  }
+  removeMember(merchantId: string, userId: string): Promise<unknown> {
+    return this.send('DELETE', `/api/merchants/${merchantId}/members/${userId}`);
   }
 
   // Payments and refunds
@@ -126,6 +180,21 @@ export class Api {
   // Webhooks
   webhookEndpoints(merchantId: string): Promise<WebhookEndpoint[]> {
     return this.get(`/api/merchants/${merchantId}/webhook-endpoints`);
+  }
+  createWebhookEndpoint(merchantId: string, body: { url: string; description: string | null; eventTypes: string[] }): Promise<WebhookSecret> {
+    return this.post(`/api/merchants/${merchantId}/webhook-endpoints`, body);
+  }
+  updateWebhookEndpoint(merchantId: string, endpointId: string, body: { isEnabled?: boolean; eventTypes?: string[]; description?: string | null }): Promise<WebhookEndpoint> {
+    return this.send('PATCH', `/api/merchants/${merchantId}/webhook-endpoints/${endpointId}`, body);
+  }
+  rollWebhookSecret(merchantId: string, endpointId: string): Promise<WebhookSecret> {
+    return this.post(`/api/merchants/${merchantId}/webhook-endpoints/${endpointId}/roll-secret`, {});
+  }
+  pingWebhookEndpoint(merchantId: string, endpointId: string): Promise<Delivery> {
+    return this.post(`/api/merchants/${merchantId}/webhook-endpoints/${endpointId}/ping`, {});
+  }
+  redeliver(merchantId: string, deliveryId: string): Promise<Delivery> {
+    return this.post(`/api/merchants/${merchantId}/webhook-deliveries/${deliveryId}/redeliver`, {});
   }
   deliveries(merchantId: string, query: { status?: string; eventType?: string; page?: number; pageSize?: number }): Promise<Page<Delivery>> {
     return this.get(`/api/merchants/${merchantId}/webhook-deliveries`, query);

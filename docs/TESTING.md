@@ -129,6 +129,38 @@ Test payment references contain no digits (`PaymentScenario.UniqueReference`). R
 
 The dashboard was also driven in the browser against the Compose stack (sign-in, overview, transaction explorer, detail with ledger, refund dialog rejecting an over-refund then refunding, reports with charts).
 
+## End-to-end tests (Playwright)
+
+`tests/e2e` drives the reviewer scenarios (REQUIREMENTS.md §6) through the dashboard and the merchant API against the running Compose stack. The browser uses the Angular dev server on `http://localhost:4200`, whose proxy verifies the HTTPS gateway against Caddy's local CA, so no certificate check is ever skipped.
+
+```bash
+docker compose up -d
+docker compose cp gateway:/data/caddy/pki/authorities/local/root.crt web/payflow-dashboard/.certs/caddy-root.crt
+cd tests/e2e && npm ci && npx playwright install chromium
+npm test
+```
+
+The platform admin comes from `PAYFLOW_E2E_ADMIN_EMAIL` / `PAYFLOW_E2E_ADMIN_PASSWORD`, or locally from `.env`. Every run creates its own merchants and users. Scenarios reuse one session per user, because PayFlow limits sign-in to 10 attempts a minute per client and that limit is not relaxed for tests; if a run still hits it, the helper waits out the window once.
+
+Scenario 6 talks to the reference receiver (`tools/webhook-sink`) on its loopback port (`PAYFLOW_SINK_PORT` from `.env`, or `PAYFLOW_E2E_SINK_URL`). It sets the sink's signing secret to the new endpoint's, so deliveries to the sink for other demo endpoints fail verification until the sink is restarted (`docker compose restart webhook-sink`).
+
+A full run takes about 3 minutes, mostly real waiting: PayFlow's first webhook retry (1 minute ± 20 %), the settlement cut-off (minute precision, never in the future) and the 60-second report cache. Nothing in the stack is sped up or faked for the tests.
+
+| Scenario | What the suite does | Status |
+|---|---|---|
+| 1. Register and manage a merchant | UI: register with a first admin, activate, accept the invitation (token only in the `#` fragment), first sign-in, issue an API key shown once, use it | ✅ |
+| 2–3. Simulated payment and its lifecycle | API payment; UI explorer filter, timeline, ledger lines | ✅ |
+| 4. Retry without duplicates | Byte-identical replay with `Idempotent-Replayed`, changed body → 422 `idempotency_key_reused`, one row in the UI | ✅ |
+| 5. Partial refund | UI dialog rejects an over-refund, refund completes, remaining balance 60.00 | ✅ |
+| 6. Webhook config and delivery attempts | UI: URL with credentials refused; endpoint for one event, secret shown once; first delivery answered 500 → Retrying with next attempt; PayFlow's own retry succeeds (attempt 2, HTTP 200, body excerpt); the sink verifies every signature; redelivery reuses the `evt_` id and the sink flags the duplicate; secret roll with grace period, ping verified with the new secret; disable | ✅ |
+| 7. Generate a settlement | 3 payments, 1 decline, a partial refund; admin runs settlement for the merchant at a cut-off, simulated bank rejection, retry → Paid; second run creates nothing; merchant sees gross − fees − refunds = net = payout, 4 line items, CSV export with exactly those items | ✅ |
+| 8. Import a statement | Generate today's statement with one of each discrepancy planted, import it; the same file again is rejected by content hash; a malformed file is rejected with errors | ✅ |
+| 9. Identify discrepancies | Matching classifies all six planted kinds (6 new exceptions); amount mismatch Open → In review → Resolved (note required), missing internal dismissed; decision recorded with actor and note; rerun raises 0 new, 6 seen again, closed ones stay closed | ✅ |
+| 10. Financial and operational reports | Merchant report exact for that merchant: 4 payments, ZAR 399.99 succeeded, 75.00 % success, top failure code, ZAR 20.00 refunded (5.00 %), 1 paid batch, payout equals the batch; platform report adds the reconciliation backlog and webhook figures | ✅ |
+| 11. Run automated tests | This suite plus `dotnet test` and `npm run test:ci` (sections above) | ✅ |
+
+What the browser suite does not repeat, because the unit and integration tests cover it more precisely: the SSRF guard's private, loopback and link-local rules (`SsrfGuardTests`, `WebhookTests`; the Compose demo allows private networks so it can reach the sink), retry exhaustion after 8 attempts (`WebhookUnitTests`), carry-forward of a negative net (`SettlementComposeTests`), and concurrent settlement runs (`SettlementTests`).
+
 ## End-to-end check against Docker Compose
 
 Besides the automated suites, each phase is checked on the real stack (`docker compose up --build`)
