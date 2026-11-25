@@ -67,6 +67,7 @@ export function navFor(
       <span class="pf-spacer"></span>
       @if (auth.user(); as user) {
         <span class="pf-user">{{ user.displayName }}@if (user.isPlatformAdmin) { · Platform admin }</span>
+        <a mat-button routerLink="/account/security">Security</a>
         <button mat-button type="button" (click)="signOut()">Sign out</button>
       }
     </mat-toolbar>

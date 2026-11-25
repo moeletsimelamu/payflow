@@ -1,6 +1,6 @@
 import { Page, expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { MerchantApi, activeMerchant, adminCredentials, cents, signIn } from '../support/payflow';
+import { MerchantApi, activeMerchant, adminCredentials, cents, signIn, signInAsAdmin } from '../support/payflow';
 
 /**
  * Scenarios 7–10 on one fresh merchant with known activity: three successful payments, one
@@ -37,7 +37,7 @@ test.describe('settlement, reconciliation and reports', () => {
 
     admin = await browser.newPage();
     owner = await browser.newPage();
-    await signIn(admin, adminCredentials().email, adminCredentials().password);
+    await signInAsAdmin(admin);
     await signIn(owner, merchant.ownerEmail, merchant.ownerPassword);
   });
 
@@ -120,6 +120,7 @@ test.describe('settlement, reconciliation and reports', () => {
   let lineCount = 0;
 
   test('8. Import a statement (REC-1..2)', async () => {
+    test.setTimeout(240_000); // see the import below
     await admin.goto('/admin/reconciliation');
     const statement = admin.locator('section[aria-labelledby="import"]');
     const generator = admin.getByRole('form', { name: 'Generate a statement' });
@@ -144,7 +145,9 @@ test.describe('settlement, reconciliation and reports', () => {
 
     // REC-1: import it...
     await statement.getByRole('button', { name: 'Import' }).click();
-    await expect(statement.locator('p.pf-notice')).toContainText(`Imported ${fileName} (${lineCount} lines).`);
+    // The statement covers every payment on the platform that day, so on a stack that has also run
+    // the load test it can hold tens of thousands of lines; the import is synchronous.
+    await expect(statement.locator('p.pf-notice')).toContainText(`Imported ${fileName} (${lineCount} lines).`, { timeout: 120_000 });
 
     // ...the same file again is rejected by its content hash...
     await statement.getByLabel('Statement CSV').fill(csv);

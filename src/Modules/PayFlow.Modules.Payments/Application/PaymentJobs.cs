@@ -1,3 +1,4 @@
+using PayFlow.Infrastructure.Telemetry;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -43,6 +44,8 @@ internal sealed class PendingPaymentsJob(IServiceScopeFactory scopes, PayFlowDbC
             {
                 continue;
             }
+
+            using var activity = PayFlowTelemetry.StartWork("payment.resolve_pending");
 
             try
             {
@@ -98,6 +101,8 @@ internal sealed class ProcessingRecoveryJob(
             {
                 continue;
             }
+
+            using var activity = PayFlowTelemetry.StartWork("payment.recover_processing");
 
             try
             {

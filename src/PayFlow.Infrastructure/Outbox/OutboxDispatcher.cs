@@ -78,6 +78,8 @@ public sealed class OutboxDispatchJob(IServiceScopeFactory scopes, ILogger<Outbo
 
                 var message = await db.OutboxMessages.SingleAsync(m => m.Id == claimedId, cancellationToken);
                 sp.GetRequiredService<CorrelationContext>().CorrelationId = message.CorrelationId; // keep the originating request's id
+                using var activity = Telemetry.PayFlowTelemetry.StartWork("outbox.dispatch", message.CorrelationId);
+                activity?.SetTag("payflow.message_type", message.Type);
 
                 foreach (var handler in sp.GetServices<IOutboxHandler>().Where(h => h.Handles(message.Type)))
                 {

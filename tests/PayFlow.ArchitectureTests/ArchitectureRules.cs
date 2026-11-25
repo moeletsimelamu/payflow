@@ -102,7 +102,14 @@ public sealed class ArchitectureRules
     {
         // Phase 2 auth endpoints commit audit records through the shared context; from Phase 3 on,
         // business endpoints must call application services. This rule lists the allowed exceptions.
-        var allowed = new[] { "PayFlow.Modules.Identity.Endpoints.AuthEndpoints" };
+        // Sign-in, including its MFA step, is the same plumbing: it commits audit records and the
+        // last sign-in time alongside Identity's own stores.
+        var allowed = new[]
+        {
+            "PayFlow.Modules.Identity.Endpoints.AuthEndpoints",
+            "PayFlow.Modules.Identity.Endpoints.MfaEndpoints",
+            "PayFlow.Modules.Identity.Endpoints.SignInFlow",
+        };
         foreach (var module in ModuleAssemblies)
         {
             var offenders = Types.InAssembly(module).That().ResideInNamespaceContaining(".Endpoints")

@@ -4,18 +4,19 @@ import { firstValueFrom } from 'rxjs';
 import {
   ApiKey,
   CurrentUser,
+  Delivery,
+  ExceptionStatus,
   FeePlan,
+  GeneratedStatement,
   IssuedApiKey,
+  LoginStep,
   Member,
   MemberInvitation,
   MemberRole,
-  RegisterMerchantRequest,
-  RegisteredMerchant,
-  WebhookSecret,
-  Delivery,
-  ExceptionStatus,
-  GeneratedStatement,
   Merchant,
+  MfaEnrollment,
+  MfaRecoveryCodes,
+  MfaStatus,
   Page,
   PaymentDetail,
   PaymentRefunds,
@@ -25,6 +26,8 @@ import {
   ReconciliationOutcome,
   ReconciliationRun,
   Refund,
+  RegisteredMerchant,
+  RegisterMerchantRequest,
   Report,
   ResolutionType,
   SettlementBatch,
@@ -32,6 +35,7 @@ import {
   SettlementStatus,
   Statement,
   WebhookEndpoint,
+  WebhookSecret,
 } from './models';
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -103,8 +107,27 @@ export class Api {
   antiforgery(): Promise<unknown> {
     return this.get('/api/auth/antiforgery');
   }
-  login(email: string, password: string): Promise<CurrentUser> {
+  /** A session (the user), or the second-factor step still needed. */
+  login(email: string, password: string): Promise<CurrentUser | LoginStep> {
     return this.post('/api/auth/login', { email, password });
+  }
+  verifyMfa(answer: { code: string } | { recoveryCode: string }): Promise<CurrentUser> {
+    return this.post('/api/auth/mfa/verify', answer);
+  }
+  startMfaEnrollment(): Promise<MfaEnrollment> {
+    return this.post('/api/auth/mfa/enrollment', null);
+  }
+  confirmMfaEnrollment(code: string): Promise<MfaRecoveryCodes> {
+    return this.post('/api/auth/mfa/enrollment/confirm', { code });
+  }
+  mfaStatus(): Promise<MfaStatus> {
+    return this.get('/api/auth/mfa');
+  }
+  regenerateRecoveryCodes(code: string): Promise<MfaRecoveryCodes> {
+    return this.post('/api/auth/mfa/recovery-codes', { code });
+  }
+  disableMfa(code: string): Promise<unknown> {
+    return this.post('/api/auth/mfa/disable', { code });
   }
   me(): Promise<CurrentUser> {
     return this.get('/api/auth/me');

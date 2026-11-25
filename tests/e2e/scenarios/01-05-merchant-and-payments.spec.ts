@@ -8,7 +8,7 @@ test('1. Register and manage a merchant (MER-1..7)', async ({ page }) => {
   const admin = adminCredentials();
 
   // Platform admin registers the merchant with its first admin.
-  await signIn(page, admin.email, admin.password);
+  await signIn(page, admin.email, admin.password, admin.totpSecret);
   await page.goto('/admin/merchants');
   await page.getByRole('link', { name: 'Register a merchant' }).click();
   await page.getByLabel('Legal name').fill(`Scenario One ${tag} (Pty) Ltd`);
@@ -40,7 +40,7 @@ test('1. Register and manage a merchant (MER-1..7)', async ({ page }) => {
   await page.getByRole('button', { name: 'Set password' }).click();
   await expect(page.getByText('Your password is set.')).toBeVisible();
   await signIn(page, ownerEmail, password);
-  await expect(page.getByRole('heading', { name: `Scenario One ${tag}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: `Scenario One ${tag}`, level: 1 })).toBeVisible();
 
   // ...and issues an API key, shown once.
   await page.getByRole('link', { name: 'API keys' }).click();

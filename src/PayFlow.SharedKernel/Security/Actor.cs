@@ -42,6 +42,9 @@ public static class PayFlowClaimTypes
 
     public const string DisplayName = "pf:display_name";
 
+    /// <summary>Present ("true") when the user has an authenticator enrolled.</summary>
+    public const string MfaEnabled = "pf:mfa_enabled";
+
     /// <summary>Merchant a machine principal (API key) acts for.</summary>
     public const string MerchantId = "pf:merchant_id";
 }

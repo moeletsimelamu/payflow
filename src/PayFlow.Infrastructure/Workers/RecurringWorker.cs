@@ -1,3 +1,5 @@
+using PayFlow.Infrastructure.Telemetry;
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -55,16 +57,20 @@ public sealed class RecurringWorker<TJob>(
         }
 
         using var timer = new PeriodicTimer(interval(options.Value));
+        var jobTag = PayFlowTelemetry.Tag("payflow.job", typeof(TJob).Name);
         do
         {
+            var started = Stopwatch.GetTimestamp();
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
                 scope.ServiceProvider.GetRequiredService<CorrelationContext>().CorrelationId = CorrelationContext.NewId();
                 var job = scope.ServiceProvider.GetRequiredService<TJob>();
                 var handled = await job.RunOnceAsync(stoppingToken);
+                PayFlowTelemetry.WorkerBatchDuration.Record(Stopwatch.GetElapsedTime(started).TotalSeconds, jobTag);
                 if (handled > 0)
                 {
+                    PayFlowTelemetry.WorkerItems.Add(handled, jobTag);
                     logger.LogInformation("{Job} handled {Count} item(s).", job.Name, handled);
                 }
             }
@@ -75,6 +81,7 @@ public sealed class RecurringWorker<TJob>(
             catch (Exception ex)
             {
                 // A failing batch must not stop the worker; the next tick retries.
+                PayFlowTelemetry.WorkerFailures.Add(1, jobTag);
                 logger.LogError(ex, "{Job} failed; retrying on the next tick.", typeof(TJob).Name);
             }
         }

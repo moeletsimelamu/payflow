@@ -29,6 +29,10 @@ internal sealed class PayFlowClaimsPrincipalFactory(
         identity.AddClaim(new Claim(PayFlowClaimTypes.ActorType, nameof(ActorType.User)));
         identity.AddClaim(new Claim(PayFlowClaimTypes.PublicId, PublicId.Create(IdPrefixes.User, user.Id)));
         identity.AddClaim(new Claim(PayFlowClaimTypes.DisplayName, user.DisplayName));
+        if (user.TwoFactorEnabled)
+        {
+            identity.AddClaim(new Claim(PayFlowClaimTypes.MfaEnabled, "true"));
+        }
 
         var memberships = await db.Set<MerchantMembership>()
             .AsNoTracking()

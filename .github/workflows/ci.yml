@@ -35,20 +35,34 @@ jobs:
       - name: Migrations match the model
         run: dotnet ef migrations has-pending-model-changes --project src/PayFlow.Migrations --startup-project src/PayFlow.Migrations
 
-      - name: Test (unit, architecture, integration via Testcontainers)
-        run: dotnet test --solution PayFlow.slnx -c Release --no-build --results-directory TestResults
+      - name: Test (unit, architecture, integration via Testcontainers) with coverage
+        run: dotnet test --solution PayFlow.slnx -c Release --no-build --results-directory TestResults --coverage --coverage-output-format cobertura
+
+      # One report across the three test projects; migrations (generated) and tests excluded.
+      # Minimums sit just below the measured figures (92 % lines, 80 % branches): docs/TESTING.md.
+      - name: Coverage gate (lines >= 90 %, branches >= 78 %)
+        run: |
+          dotnet reportgenerator \
+            -reports:"TestResults/**/*.cobertura.xml" \
+            -targetdir:coverage-report \
+            -reporttypes:"Cobertura;MarkdownSummaryGithub;HtmlSummary" \
+            -assemblyfilters:"+PayFlow.*;-PayFlow.Migrations;-PayFlow.*Tests"
+          cat coverage-report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          python3 build/check-coverage.py coverage-report/Cobertura.xml --line 90 --branch 78
 
       - name: Fail on vulnerable packages
         run: |
           dotnet list PayFlow.slnx package --vulnerable --include-transitive | tee vulnerable.txt
           if grep -q "has the following vulnerable packages" vulnerable.txt; then exit 1; fi
 
-      - name: Upload test results
+      - name: Upload test results and coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: TestResults
+          path: |
+            TestResults
+            coverage-report
 
   frontend:
     name: Build and test (dashboard)
@@ -69,7 +83,8 @@ jobs:
       - name: Install (no install scripts)
         run: npm ci --ignore-scripts --no-fund
 
-      - name: Unit, money-formatting and accessibility tests (Vitest + axe)
+      # Coverage thresholds (angular.json "coverageThresholds") fail this step when not met.
+      - name: Unit, money-formatting and accessibility tests (Vitest + axe) with coverage gate
         run: npm run test:ci
 
       - name: Production build (bundle budgets enforced)

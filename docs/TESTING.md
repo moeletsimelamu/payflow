@@ -1,6 +1,6 @@
 # PayFlow — Testing
 
-Status: **Phases 2–8 covered** (333 unit, 9 architecture, 121 integration and 60 dashboard tests, all passing); extended every phase. Phase 9 adds E2E (Playwright), load (k6) and coverage gates.
+Status: **Phases 2–9 covered**: 497 backend tests (unit, architecture, integration) and 99 dashboard tests, all passing, with coverage gates in CI. Phase 9 added the Playwright suite for the 11 reviewer scenarios, a chaos test that kills the API under load, a k6 load test, OpenTelemetry tests, session-lifetime tests and multi-factor sign-in tests (`TotpTests` with the RFC 6238 vectors, `MfaTests`, dashboard specs) (2026-11-24).
 
 ## Test projects
 
@@ -140,9 +140,11 @@ cd tests/e2e && npm ci && npx playwright install chromium
 npm test
 ```
 
-The platform admin comes from `PAYFLOW_E2E_ADMIN_EMAIL` / `PAYFLOW_E2E_ADMIN_PASSWORD`, or locally from `.env`. Every run creates its own merchants and users. Scenarios reuse one session per user, because PayFlow limits sign-in to 10 attempts a minute per client and that limit is not relaxed for tests; if a run still hits it, the helper waits out the window once.
+The platform admin comes from `PAYFLOW_E2E_ADMIN_EMAIL` / `PAYFLOW_E2E_ADMIN_PASSWORD` / `PAYFLOW_E2E_ADMIN_TOTP_SECRET`, or locally from `.env` (`PAYFLOW_ADMIN_TOTP_SECRET`: platform admins sign in with an authenticator code, which the helpers compute; a code is accepted once, so back-to-back admin sign-ins wait up to 30 s for a fresh one). k6 reads the same secret. Every run creates its own merchants and users. Scenarios reuse one session per user, because PayFlow limits sign-in to 10 attempts a minute per client and that limit is not relaxed for tests; if a run still hits it, the helper waits out the window once.
 
 Scenario 6 talks to the reference receiver (`tools/webhook-sink`) on its loopback port (`PAYFLOW_SINK_PORT` from `.env`, or `PAYFLOW_E2E_SINK_URL`). It sets the sink's signing secret to the new endpoint's, so deliveries to the sink for other demo endpoints fail verification until the sink is restarted (`docker compose restart webhook-sink`).
+
+**Do not run the load test on the stack you use for the scenarios on the same day.** Scenario 8 generates the acquirer statement for the whole platform for today; after a k6 run (about 100,000 payments) that statement has ~30,000 lines, and pasting 3 MB of CSV into the dashboard's import box stalls the browser (the API itself imports it in 7–18 s). On 2026-11-24 this blocked scenarios 8–10 after a load test; they passed on 2026-11-23. Use a separate stack for load tests, or run the scenarios on another day. A streamed file import is a follow-up.
 
 A full run takes about 3 minutes, mostly real waiting: PayFlow's first webhook retry (1 minute ± 20 %), the settlement cut-off (minute precision, never in the future) and the 60-second report cache. Nothing in the stack is sped up or faked for the tests.
 
@@ -161,6 +163,88 @@ A full run takes about 3 minutes, mostly real waiting: PayFlow's first webhook r
 
 What the browser suite does not repeat, because the unit and integration tests cover it more precisely: the SSRF guard's private, loopback and link-local rules (`SsrfGuardTests`, `WebhookTests`; the Compose demo allows private networks so it can reach the sink), retry exhaustion after 8 attempts (`WebhookUnitTests`), carry-forward of a negative net (`SettlementComposeTests`), and concurrent settlement runs (`SettlementTests`).
 
+## Chaos: worker restarts
+
+`tests/e2e/chaos/worker-restarts.spec.ts` checks the reliability requirement (REQUIREMENTS.md §5: workers survive restarts without loss or duplication). It SIGKILLs the `api` container, which also runs every background worker, four times: twice while 40 payments arrive (success, decline, pending-then-success, pending-then-decline), and twice while 10 partial refunds are processed, pending payments fall due and webhooks are delivered to the reference receiver. The client retries with the same Idempotency-Key, as a merchant's server would.
+
+```bash
+cd tests/e2e && npm run test:chaos     # kills and restarts the Compose api container
+```
+
+After the stack converges, the test asserts exactly the state a calm run would leave:
+
+- one payment per key, each with its simulated outcome;
+- each refund completed once;
+- exactly one event per state change (no event lost or duplicated by a replayed outbox message);
+- one delivery per event, each received by the sink with a valid signature;
+- every journal entry balanced, and the merchant owed exactly 32 × 95.10 − 10 × 5.00.
+
+It also requires that the crashes actually interrupted requests. Runs in about 2.5 minutes; the 2026-11-24 run passed.
+
+## Load test (k6)
+
+`tests/load/payments.js` checks the performance target (REQUIREMENTS.md §5: `POST /v1/payments` p95 < 150 ms, 100 req/s sustained) through the TLS gateway, with TLS verified against Caddy's CA.
+
+```bash
+docker compose --profile load run --rm k6                        # 20 s warm-up, then 100 req/s for 2 min
+docker compose --profile load run --rm -e RATE=50 -e DURATION=30s k6
+```
+
+Setup creates two merchants with ten API keys each through the dashboard API (per-key quota 600 a minute, left on). Every tenth payment is sent twice with the same key and must come back as a replay of the same payment.
+
+Thresholds, all on the sustained phase:
+
+- p95 < 150 ms;
+- errors < 1 %;
+- checks > 99 %;
+- almost no dropped iterations;
+- at least 95 % of the target request count, so an empty run cannot pass.
+
+Result on the reference machine (Docker Desktop on Windows, 12 vCPUs, other stacks running), 2026-11-24:
+
+| | Before Phase 9 fixes | After |
+|---|---|---|
+| Throughput achieved | ~35 req/s (7,791 iterations dropped) | 100 req/s (none dropped) |
+| p95 / p99 | 16.3 s / 20.1 s | 73 ms / 150 ms |
+| Failed requests | 13.9 % (`53300 too many clients`) | 0 of 13,677 |
+
+The fixes (SECURITY.md, SEC-5):
+
+- an asynchronous log sink: the synchronous console sink stalled request threads while transactions were open;
+- a process-wide cache of committed ledger account ids, saving six round trips per payment;
+- the connection pool capped at 32, below Postgres's 100 connections.
+
+Later the same day, after the MFA work, the same test failed on the same laptop: p95 0.4–1.4 s at 80–100 req/s, and up to 9 s on cold caches. Evidence points to the machine rather than the code:
+
+- low-load latency is unchanged (median 47 ms at 2 req/s);
+- turning tracing off made no difference;
+- during the run the host was at 93 % CPU with the processor at 75 % of its base clock (a 15 W laptop chip, throttled after a day of builds and tests);
+- nothing in the MFA change touches `POST /v1/payments`.
+
+The database had also grown to 112,000 payments with Postgres's default 128 MB `shared_buffers`. **Re-run the load test on a cool machine (or a dedicated box) before relying on the figures above.**
+
+With OpenTelemetry export on and 10 % trace sampling, p95 is 105 ms. Full sampling with export costs about 0.5 s at this rate (ARCHITECTURE.md §8).
+
+## Coverage gates
+
+Both test suites fail CI when coverage drops below a minimum set just under the measured figures. Raise the minimums as coverage improves.
+
+| Suite | Measured (2026-11-24) | Minimum enforced | Where |
+|---|---|---|---|
+| Backend: unit + architecture + integration, migrations and tests excluded | 92.3 % lines, 80.6 % branches | 90 % lines, 78 % branches | `ci.yml` (ReportGenerator merge + `build/check-coverage.py`) |
+| Dashboard (Vitest, v8) | 77.8 % statements, 73.0 % branches, 58.0 % functions, 77.0 % lines | 74 / 69 / 51 / 72 | `angular.json` `coverageThresholds` |
+
+Locally:
+
+```bash
+dotnet test --solution PayFlow.slnx -c Release --coverage --coverage-output-format cobertura --results-directory TestResults/coverage
+dotnet reportgenerator -reports:"TestResults/coverage/*.cobertura.xml" -targetdir:coverage-report -reporttypes:"Cobertura;TextSummary" -assemblyfilters:"+PayFlow.*;-PayFlow.Migrations;-PayFlow.*Tests"
+python build/check-coverage.py coverage-report/Cobertura.xml --line 90 --branch 78
+cd web/payflow-dashboard && npm run test:ci      # coverage on, thresholds enforced
+```
+
+The dashboard tests run on at most four Vitest workers (`vitest.config.ts`): one jsdom + Material + axe worker per core oversubscribed a busy machine, and under coverage instrumentation single axe scans then exceeded a minute.
+
 ## End-to-end check against Docker Compose
 
 Besides the automated suites, each phase is checked on the real stack (`docker compose up --build`)
@@ -170,5 +254,7 @@ call, the plain-HTTP rejection, and a scan of the API logs and audit table for t
 ## CI
 
 `.github/workflows/ci.yml` builds with warnings as errors, checks that migrations match the
-model, runs all tests (GitHub's Ubuntu runners provide Docker for Testcontainers), fails on
-vulnerable packages, and builds the API image.
+model, runs all tests with coverage (GitHub's Ubuntu runners provide Docker for Testcontainers),
+enforces the coverage minimums, fails on vulnerable packages, and builds the API and dashboard
+images. The Playwright, chaos and k6 suites need the full Compose stack and run locally (sections
+above).

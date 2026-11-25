@@ -3,7 +3,8 @@
   "private": true,
   "description": "End-to-end tests for the PayFlow reviewer scenarios (docs/REQUIREMENTS.md §6).",
   "scripts": {
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:chaos": "playwright test -c playwright.chaos.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.57.0",

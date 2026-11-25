@@ -26,7 +26,8 @@ public sealed record CurrentUserResponse(
     string Email,
     string DisplayName,
     bool IsPlatformAdmin,
-    IReadOnlyList<MembershipResponse> Memberships);
+    IReadOnlyList<MembershipResponse> Memberships,
+    bool MfaEnabled);
 
 public sealed record AcceptInvitationRequest(string Email, [property: Sensitive] string Token, [property: Sensitive] string Password);
 
@@ -77,6 +78,8 @@ internal static class AuthEndpoints
 
         group.MapGet("/me", Me).RequireAuthorization(AuthPolicies.DashboardUser);
 
+        group.MapMfaEndpoints();
+
         return app;
     }
 
@@ -94,7 +97,9 @@ internal static class AuthEndpoints
         IAuditLog audit,
         PayFlowDbContext db,
         IAntiforgery antiforgery,
-        TimeProvider clock)
+        TimeProvider clock,
+        MfaService mfa,
+        Microsoft.Extensions.Options.IOptions<MfaOptions> mfaOptions)
     {
         var user = await users.FindByEmailAsync(request.Email);
         if (user is null)
@@ -123,23 +128,19 @@ internal static class AuthEndpoints
             return InvalidCredentials();
         }
 
-        // Not via UserManager.UpdateAsync: its concurrency stamp makes simultaneous logins of the same
-        // user fail (silently, as an IdentityResult), which used to lose the audit record. A direct
-        // update has no stamp to conflict on, and the audit record is committed on its own.
-        var now = clock.GetUtcNow();
-        await db.Users.Where(u => u.Id == user.Id)
-            .ExecuteUpdateAsync(s => s.SetProperty(u => u.LastLoginAt, now), http.RequestAborted);
-        audit.Record(new AuditEntry("identity.login.succeeded", UserTarget, publicId) { Actor = actor });
-        await db.SaveChangesAsync(http.RequestAborted);
+        // A password alone is not enough for users with an authenticator, nor for platform admins
+        // (who must set one up first): remember the verified password briefly and ask for the next step.
+        var mfaEnabled = await mfa.IsEnabledAsync(user.Id, http.RequestAborted);
+        if (mfaEnabled || (mfaOptions.Value.RequiredForPlatformAdmins && await users.IsInRoleAsync(user, PlatformRoles.PlatformAdmin)))
+        {
+            var next = mfaEnabled ? MfaSteps.Verify : MfaSteps.Enroll;
+            await PendingSignIn.StartAsync(http, user.Id, next, mfaOptions.Value.PendingSignInLifetime, clock);
+            audit.Record(new AuditEntry("identity.login.password_verified", UserTarget, publicId) { Actor = actor, Changes = new { next } });
+            await db.SaveChangesAsync(http.RequestAborted);
+            return Results.Json(new LoginStepResponse(next), statusCode: StatusCodes.Status202Accepted);
+        }
 
-        await signIn.SignInAsync(user, isPersistent: false);
-
-        // The antiforgery token is bound to the user, so issue a fresh one for the new principal.
-        var principal = await signIn.CreateUserPrincipalAsync(user);
-        http.User = principal;
-        AntiforgeryCookies.Issue(http, antiforgery);
-
-        return Results.Ok(ToResponse(principal));
+        return Results.Ok(await SignInFlow.CompleteAsync(http, user, method: null, users, signIn, audit, db, antiforgery, clock));
     }
 
     /// <summary>Sets the first password of an invited user using their one-time invitation token.</summary>
@@ -195,14 +196,15 @@ internal static class AuthEndpoints
 
     private static IResult Me(HttpContext http) => Results.Ok(ToResponse(http.User));
 
-    private static CurrentUserResponse ToResponse(ClaimsPrincipal principal) => new(
+    internal static CurrentUserResponse ToResponse(ClaimsPrincipal principal) => new(
         Id: principal.FindFirstValue(PayFlowClaimTypes.PublicId) ?? string.Empty,
         Email: principal.FindFirstValue(ClaimTypes.Email) ?? principal.FindFirstValue(ClaimTypes.Name) ?? string.Empty,
         DisplayName: principal.FindFirstValue(PayFlowClaimTypes.DisplayName) ?? string.Empty,
         IsPlatformAdmin: principal.IsInRole(PlatformRoles.PlatformAdmin),
         Memberships: CurrentUser.ParseMemberships(principal)
             .Select(m => new MembershipResponse(PublicId.Create(IdPrefixes.Merchant, m.MerchantId), m.Role))
-            .ToList());
+            .ToList(),
+        MfaEnabled: principal.HasClaim(PayFlowClaimTypes.MfaEnabled, "true"));
 
     private static IResult InvalidCredentials() =>
         ErrorResults.Problem(Error.Unauthorized("invalid_credentials", "The e-mail address or password is incorrect."));

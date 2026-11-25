@@ -79,7 +79,13 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "runnerConfig": "vitest.config.ts",
+            "coverageExclude": ["src/**/*.spec.ts", "src/testing/**"],
+            "coverageReporters": ["text-summary", "cobertura", "html"],
+            "coverageThresholds": { "statements": 74, "branches": 69, "functions": 51, "lines": 72 }
+          }
         }
       }
     }

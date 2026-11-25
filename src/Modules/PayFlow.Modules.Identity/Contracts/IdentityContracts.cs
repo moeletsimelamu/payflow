@@ -42,6 +42,9 @@ public static class AuthCookies
     /// <summary>HttpOnly session cookie. The __Host- prefix forces Secure, Path=/ and no Domain.</summary>
     public const string Session = "__Host-payflow.session";
 
+    /// <summary>HttpOnly, 5-minute cookie between a verified password and the second factor.</summary>
+    public const string PendingSignIn = "__Host-payflow.mfa";
+
     /// <summary>HttpOnly antiforgery cookie token.</summary>
     public const string Antiforgery = "__Host-payflow.af";
 

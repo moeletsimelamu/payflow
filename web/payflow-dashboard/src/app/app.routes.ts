@@ -31,12 +31,15 @@ const home = async () => {
 export const routes: Routes = [
   { path: 'login', title: 'Sign in · PayFlow', loadComponent: () => import('./pages/login').then((m) => m.LoginPage) },
   { path: 'accept-invitation', title: 'Set up your account · PayFlow', loadComponent: () => import('./pages/accept-invitation').then((m) => m.AcceptInvitationPage) },
+  // Reachable before a session exists: platform admins set up their authenticator during sign-in.
+  { path: 'mfa-setup', title: 'Set up an authenticator · PayFlow', loadComponent: () => import('./pages/mfa-setup').then((m) => m.MfaSetupPage) },
   {
     path: '',
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     canActivate: [signedIn],
     children: [
       { path: '', pathMatch: 'full', canActivate: [home], children: [] },
+      { path: 'account/security', title: 'Security · PayFlow', loadComponent: () => import('./pages/account-security').then((m) => m.AccountSecurityPage) },
       {
         path: 'admin',
         canActivate: [platformAdmin],

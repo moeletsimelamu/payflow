@@ -32,6 +32,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   redis:
     image: redis:7.4-alpine
@@ -46,6 +47,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   # One-shot job: applies EF Core migrations with the DDL-capable role, then exits.
   migrate:
@@ -69,7 +71,9 @@ services:
     image: payflow-api:local
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__PayFlow: "Host=postgres;Database=payflow;Username=payflow_app;Password=${POSTGRES_APP_PASSWORD};GSS Encryption Mode=Disable"
+      # Pool capped well below Postgres's max_connections (100): Npgsql's default of 100 lets one API
+      # instance take every slot under load ("too many clients"). 32 sustains 100 req/s (tests/load).
+      ConnectionStrings__PayFlow: "Host=postgres;Database=payflow;Username=payflow_app;Password=${POSTGRES_APP_PASSWORD};GSS Encryption Mode=Disable;Maximum Pool Size=32"
       ConnectionStrings__Redis: "redis:6379,password=${REDIS_PASSWORD}"
       Security__ApiKeys__Pepper: ${API_KEY_PEPPER}
       Security__MasterKey: ${PAYFLOW_MASTER_KEY}
@@ -77,8 +81,14 @@ services:
       # private Compose network. Never enable these in production: they turn the SSRF guard off.
       Webhooks__AllowHttp: "true"
       Webhooks__AllowPrivateNetworks: "true"
+      # OpenTelemetry traces and metrics over OTLP; empty (the default) exports nothing.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${PAYFLOW_OTLP_ENDPOINT:-}
+      # Share of request traces kept when exporting (1 = all; 0.1 keeps tracing cheap under load).
+      Telemetry__TraceSampleRatio: ${PAYFLOW_TRACE_SAMPLE_RATIO:-1}
       Seed__PlatformAdmin__Email: ${PAYFLOW_ADMIN_EMAIL:?Set PAYFLOW_ADMIN_EMAIL in .env}
       Seed__PlatformAdmin__Password: ${PAYFLOW_ADMIN_PASSWORD:?Set PAYFLOW_ADMIN_PASSWORD in .env}
+      # Optional: the admin's authenticator secret. Without it the admin sets one up at first sign-in.
+      Seed__PlatformAdmin__TotpSecret: ${PAYFLOW_ADMIN_TOTP_SECRET:-}
       # Trust X-Forwarded-Proto/For only from the gateway's network.
       ReverseProxy__TrustedNetworks__0: "172.31.250.0/24"
     ports:
@@ -110,6 +120,37 @@ services:
     image: payflow-web:local
     networks: [payflow]
     restart: unless-stopped
+
+  # Trace and metrics viewer (OTLP receiver + UI), on demand. Set PAYFLOW_OTLP_ENDPOINT to
+  # http://otel-dashboard:18889 in .env, then: docker compose --profile observability up -d
+  # UI: http://localhost:18888 (the sign-in link with its one-time token is in this container's log).
+  otel-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:13.0
+    profiles: [observability]
+    ports:
+      - "127.0.0.1:${PAYFLOW_OTEL_UI_PORT:-18888}:18888"
+    networks: [payflow]
+    restart: unless-stopped
+
+  # Load test for POST /v1/payments (tests/load), run on demand:
+  #   docker compose --profile load run --rm k6
+  # It shares the gateway's network namespace, so https://localhost is Caddy. TLS is verified against
+  # Caddy's local CA: the public chain is read from Caddy's admin API (127.0.0.1:2019 in that
+  # namespace), so the CA's private key in caddy_data is never mounted here.
+  k6:
+    image: grafana/k6:1.3.0
+    profiles: [load]
+    network_mode: "service:gateway"
+    volumes:
+      - ./tests/load:/scripts:ro
+    environment:
+      PAYFLOW_ADMIN_EMAIL: ${PAYFLOW_ADMIN_EMAIL}
+      PAYFLOW_ADMIN_PASSWORD: ${PAYFLOW_ADMIN_PASSWORD}
+      PAYFLOW_ADMIN_TOTP_SECRET: ${PAYFLOW_ADMIN_TOTP_SECRET:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["wget -qO /tmp/payflow-ca.pem http://127.0.0.1:2019/pki/ca/local/certificates && SSL_CERT_FILE=/tmp/payflow-ca.pem exec k6 run /scripts/payments.js"]
+    depends_on:
+      - gateway
 
   # TLS-terminating gateway (Caddy, local CA): /api, /v1, /health → api; everything else → web.
   gateway:

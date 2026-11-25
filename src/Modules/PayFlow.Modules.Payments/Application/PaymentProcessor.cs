@@ -1,3 +1,4 @@
+using PayFlow.Infrastructure.Telemetry;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +57,7 @@ internal sealed class PaymentProcessor(
         await idempotency.CompleteForResourceAsync(ResourceType, payment.Id, StatusCodes.Created, body, ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        RecordOutcome(payment);
         return new ProcessingResult(body, AppliedHere: true);
     }
 
@@ -74,7 +76,15 @@ internal sealed class PaymentProcessor(
         await RecordConsequencesAsync(payment, now, ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+        RecordOutcome(payment);
         return true;
+    }
+
+    private static void RecordOutcome(Payment payment)
+    {
+        var status = payment.Status.ToString();
+        PayFlowTelemetry.PaymentOutcomes.Add(1, PayFlowTelemetry.Tag("payflow.payment.status", status));
+        System.Diagnostics.Activity.Current?.SetTag("payflow.payment.status", status);
     }
 
     /// <summary>Row lock held until commit (the same lock refunds, reversals and settlement take), then a fresh read.</summary>

@@ -1,7 +1,8 @@
-import { APIRequestContext, Page, expect, request } from '@playwright/test';
+import { APIRequestContext, APIResponse, Page, expect, request } from '@playwright/test';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { freshTotp } from './totp';
 
 /** One value from the repository's .env, the file docker compose used to start the stack. */
 function fromDotEnv(key: string): string | undefined {
@@ -18,13 +19,17 @@ function fromDotEnv(key: string): string | undefined {
  * locally they are read from the repository's .env (PAYFLOW_ADMIN_EMAIL/PASSWORD), the same values
  * docker compose used to seed the admin.
  */
-export function adminCredentials(): { email: string; password: string } {
+export function adminCredentials(): { email: string; password: string; totpSecret: string } {
   const email = process.env['PAYFLOW_E2E_ADMIN_EMAIL'] ?? fromDotEnv('PAYFLOW_ADMIN_EMAIL');
   const password = process.env['PAYFLOW_E2E_ADMIN_PASSWORD'] ?? fromDotEnv('PAYFLOW_ADMIN_PASSWORD');
-  if (!email || !password) {
-    throw new Error('Set PAYFLOW_E2E_ADMIN_EMAIL and PAYFLOW_E2E_ADMIN_PASSWORD, or PAYFLOW_ADMIN_EMAIL / PAYFLOW_ADMIN_PASSWORD in .env.');
+  // Platform admins need an authenticator code (SECURITY.md, SEC-2): the seeded admin's secret.
+  const totpSecret = process.env['PAYFLOW_E2E_ADMIN_TOTP_SECRET'] ?? fromDotEnv('PAYFLOW_ADMIN_TOTP_SECRET');
+  if (!email || !password || !totpSecret) {
+    throw new Error(
+      'Set PAYFLOW_E2E_ADMIN_EMAIL, PAYFLOW_E2E_ADMIN_PASSWORD and PAYFLOW_E2E_ADMIN_TOTP_SECRET, or PAYFLOW_ADMIN_EMAIL / PAYFLOW_ADMIN_PASSWORD / PAYFLOW_ADMIN_TOTP_SECRET in .env.',
+    );
   }
-  return { email, password };
+  return { email, password, totpSecret };
 }
 
 /**
@@ -89,23 +94,41 @@ export const newPassword = () => `e2e-${randomBytes(12).toString('base64url')}`;
  */
 const RATE_LIMIT_WINDOW_MS = 61_000;
 
-export async function signIn(page: Page, email: string, password: string): Promise<void> {
+/** Signs in through the dashboard; pass the authenticator secret for users with MFA (platform admins). */
+export async function signIn(page: Page, email: string, password: string, totpSecret?: string): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt++) {
     await page.goto('/login');
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Password').fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
     const limited = page.getByText('Too many sign-in attempts');
-    const outcome = await Promise.race([
+    const secondStep = page.getByRole('heading', { name: 'Two-step verification' });
+    let outcome = await Promise.race([
       page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 }).then(() => 'in' as const),
       limited.waitFor({ timeout: 15_000 }).then(() => 'limited' as const),
+      secondStep.waitFor({ timeout: 15_000 }).then(() => 'code' as const),
     ]);
+    if (outcome === 'code') {
+      expect(totpSecret, `${email} needs an authenticator code`).toBeTruthy();
+      await page.getByLabel('Authentication code').fill(await freshTotp(totpSecret!));
+      await page.getByRole('button', { name: 'Verify' }).click();
+      outcome = await Promise.race([
+        page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 }).then(() => 'in' as const),
+        page.getByText('Too many attempts').waitFor({ timeout: 15_000 }).then(() => 'limited' as const),
+      ]);
+    }
     if (outcome === 'in') {
       return;
     }
     await page.waitForTimeout(RATE_LIMIT_WINDOW_MS);
   }
   await expect(page, 'sign-in stayed rate limited').not.toHaveURL(/\/login/);
+}
+
+/** The seeded platform admin, signed in through the dashboard with password and authenticator code. */
+export function signInAsAdmin(page: Page): Promise<void> {
+  const admin = adminCredentials();
+  return signIn(page, admin.email, admin.password, admin.totpSecret);
 }
 
 export async function signOut(page: Page): Promise<void> {
@@ -126,14 +149,23 @@ export async function readSecret(page: Page, title: string | RegExp): Promise<st
 export class Dashboard {
   private constructor(private readonly ctx: APIRequestContext) {}
 
-  static async signIn(baseURL: string, email: string, password: string): Promise<Dashboard> {
+  static async signIn(baseURL: string, email: string, password: string, totpSecret?: string): Promise<Dashboard> {
     const ctx = await request.newContext({ baseURL });
     const dashboard = new Dashboard(ctx);
     await ctx.get('/api/auth/antiforgery');
-    let response = await dashboard.post('/api/auth/login', { email, password });
-    if (response.status() === 429) {
+    const limited = async (send: () => Promise<APIResponse>) => {
+      const first = await send();
+      if (first.status() !== 429) {
+        return first;
+      }
       await new Promise((r) => setTimeout(r, RATE_LIMIT_WINDOW_MS));
-      response = await dashboard.post('/api/auth/login', { email, password });
+      return send();
+    };
+    let response = await limited(() => dashboard.post('/api/auth/login', { email, password }));
+    if (response.status() === 202) {
+      expect(totpSecret, `${email} needs an authenticator code`).toBeTruthy();
+      const code = await freshTotp(totpSecret!);
+      response = await limited(() => dashboard.post('/api/auth/mfa/verify', { code }));
     }
     expect(response.status(), 'dashboard sign-in').toBe(200);
     return dashboard;
@@ -187,7 +219,8 @@ let adminDashboard: Promise<Dashboard> | null = null;
 
 /** One platform-admin API session per test worker, for setup. */
 export function adminSession(baseURL: string): Promise<Dashboard> {
-  adminDashboard ??= Dashboard.signIn(baseURL, adminCredentials().email, adminCredentials().password);
+  const admin = adminCredentials();
+  adminDashboard ??= Dashboard.signIn(baseURL, admin.email, admin.password, admin.totpSecret);
   return adminDashboard;
 }
 

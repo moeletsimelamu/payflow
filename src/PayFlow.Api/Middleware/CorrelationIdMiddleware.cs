@@ -1,3 +1,4 @@
+using PayFlow.Infrastructure.Telemetry;
 using PayFlow.Infrastructure.Correlation;
 using Serilog.Context;
 
@@ -13,6 +14,7 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next)
     {
         var supplied = context.Request.Headers[CorrelationContext.HeaderName].ToString();
         correlation.CorrelationId = CorrelationContext.IsValid(supplied) ? supplied : CorrelationContext.NewId();
+        System.Diagnostics.Activity.Current?.SetTag(PayFlowTelemetry.CorrelationIdTag, correlation.CorrelationId);
 
         context.Response.OnStarting(() =>
         {

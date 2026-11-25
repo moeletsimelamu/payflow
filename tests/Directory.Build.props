@@ -8,6 +8,10 @@
     <NoWarn>$(NoWarn);CA1707;CA1001;CA1816;CA2000;CA1859;CA1861;CA2234;CA1054;CA1056;CA2201;CA1822;CA1852;CA5394;CA1034;xUnit1051</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Code coverage collector used by the CI coverage gate (docs/TESTING.md) -->
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+  </ItemGroup>
+  <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="Shouldly" />
   </ItemGroup>

@@ -13,6 +13,29 @@ export interface CurrentUser {
   displayName: string;
   isPlatformAdmin: boolean;
   memberships: Membership[];
+  mfaEnabled: boolean;
+}
+
+/** A verified password that still needs a second factor (202 from /api/auth/login). */
+export interface LoginStep {
+  next: 'mfa' | 'mfa_enrollment';
+}
+
+export interface MfaEnrollment {
+  secret: string;
+  provisioningUri: string;
+}
+
+export interface MfaRecoveryCodes {
+  recoveryCodes: string[];
+  notice: string;
+  user?: CurrentUser | null;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  required: boolean;
+  recoveryCodesRemaining: number;
 }
 
 export interface Page<T> {

@@ -1,8 +1,9 @@
 import axe from 'axe-core';
 
-// Component tests render Material in jsdom and run axe; on a loaded CI machine that can exceed
-// Vitest's 5-second default. A slow test is not a failing one.
-vi.setConfig({ testTimeout: 20_000 });
+// Component tests render Material in jsdom and run axe; on a loaded CI machine, and several times
+// slower again under coverage instrumentation, that can exceed Vitest's 5-second default. A slow
+// test is not a failing one.
+vi.setConfig({ testTimeout: 60_000 });
 
 /**
  * Runs axe-core (WCAG 2.2 A/AA rules) on a rendered element and returns readable violations.

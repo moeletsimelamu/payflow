@@ -56,9 +56,15 @@ The two never mix: a dashboard cookie is not accepted on `/v1`, and API keys are
 | Method & path | Who | Purpose |
 |---|---|---|
 | `GET /api/auth/antiforgery` | anyone | Sets the `XSRF-TOKEN` cookie. Call before the first POST. |
-| `POST /api/auth/login` | anyone | `{ "email", "password" }` → current user. Wrong password, unknown user and locked account all return the same `401 invalid_credentials`. 5 failures lock the account for 15 minutes. Issues a fresh XSRF token. |
+| `POST /api/auth/login` | anyone | `{ "email", "password" }` → `200` current user. Users with an authenticator, and every platform admin, get `202 { "next": "mfa" }` (enter a code) or `202 { "next": "mfa_enrollment" }` (platform admin without one: set it up) and a 5-minute `__Host-payflow.mfa` cookie, but no session. Wrong password, unknown user and locked account all return the same `401 invalid_credentials`. 5 failures (passwords and codes together) lock the account for 15 minutes. Issues a fresh XSRF token. |
+| `POST /api/auth/mfa/verify` | after a `202 mfa` | `{ "code" }` (6 digits from the authenticator app) or `{ "recoveryCode" }` → current user and a session. Each code and each recovery code works once. Wrong or reused: `401 mfa_code_invalid`; pending sign-in older than 5 minutes: `401 mfa_sign_in_expired`. |
+| `POST /api/auth/mfa/enrollment` | after a `202 mfa_enrollment`, or signed in | New authenticator secret, not yet active: `{ "secret" (Base32), "provisioningUri" (otpauth://) }`. `409 mfa_already_enabled` if one is set up. |
+| `POST /api/auth/mfa/enrollment/confirm` | same | `{ "code" }` activates it → `{ "recoveryCodes" (10, shown once), "notice", "user" }` and a session; other sessions of the user end. |
+| `GET /api/auth/mfa` | signed in | `{ enabled, required, recoveryCodesRemaining }` |
+| `POST /api/auth/mfa/recovery-codes` | signed in | `{ "code" }` → 10 new recovery codes; the old ones stop working. |
+| `POST /api/auth/mfa/disable` | signed in | `{ "code" }` → `204`. Platform admins cannot: `403 mfa_required`. |
 | `POST /api/auth/accept-invitation` | invited user | `{ "email", "token", "password" }` sets the first password (12+ characters). Tokens are single-use and expire after 3 days. |
-| `GET /api/auth/me` | signed in | `{ id, email, displayName, isPlatformAdmin, memberships: [{ merchantId, role }] }` |
+| `GET /api/auth/me` | signed in | `{ id, email, displayName, isPlatformAdmin, memberships: [{ merchantId, role }], mfaEnabled }` |
 | `POST /api/auth/logout` | signed in | Ends the session. |
 
 ## Dashboard: merchants (Phase 3)

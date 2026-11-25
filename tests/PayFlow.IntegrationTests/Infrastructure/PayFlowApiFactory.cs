@@ -33,6 +33,9 @@ public sealed class PayFlowApiFactory(
             ["Security:MasterKey"] = Convert.ToBase64String(Encoding.UTF8.GetBytes("integration-test-master-key-32by")),
             ["RateLimiting:AuthenticationPermitLimit"] = "10000",
             ["RateLimiting:MerchantApiPermitLimit"] = "10000",
+            // Hundreds of parallel tests sign in as the one seeded admin, and an authenticator code is
+            // accepted once only. MfaTests turn this back on (the production default) with their own users.
+            ["Security:Mfa:RequiredForPlatformAdmins"] = "false",
             ["Serilog:MinimumLevel:Default"] = "Debug",
             // Background timers are off; tests run each job explicitly so outcomes are deterministic.
             ["Workers:Enabled"] = "false",

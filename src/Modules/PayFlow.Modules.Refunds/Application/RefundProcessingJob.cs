@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using PayFlow.Infrastructure.Outbox;
 using PayFlow.Infrastructure.Persistence;
+using PayFlow.Infrastructure.Telemetry;
 using PayFlow.Infrastructure.Workers;
 using PayFlow.Modules.Ledger.Contracts;
 using PayFlow.Modules.Payments.Contracts;
@@ -44,6 +45,7 @@ internal sealed class RefundProcessingJob(IServiceScopeFactory scopes, PayFlowDb
             var ledger = sp.GetRequiredService<ILedger>();
             var outbox = sp.GetRequiredService<IOutbox>();
             var clock = sp.GetRequiredService<TimeProvider>();
+            using var activity = PayFlowTelemetry.StartWork("refund.process");
 
             await using var transaction = await scopedDb.Database.BeginTransactionAsync(cancellationToken);
             await payments.LockAsync(item.MerchantId, item.PaymentId, cancellationToken);
@@ -76,6 +78,8 @@ internal sealed class RefundProcessingJob(IServiceScopeFactory scopes, PayFlowDb
             outbox.Enqueue(succeeded ? RefundEventTypes.Succeeded : RefundEventTypes.Failed, refund.ToEvent(now));
             await scopedDb.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+            PayFlowTelemetry.RefundOutcomes.Add(1, PayFlowTelemetry.Tag("payflow.refund.status", refund.Status.ToString()));
+            activity?.SetTag("payflow.refund.status", refund.Status.ToString());
             logger.LogInformation("Refund {RefundId} {Status}.", PublicId.Create(IdPrefixes.Refund, refund.Id), refund.Status);
             handled++;
         }
