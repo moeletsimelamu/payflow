@@ -1,6 +1,6 @@
 # PayFlow — Testing
 
-Status: **Phases 2–9 covered**: 497 backend tests (unit, architecture, integration) and 99 dashboard tests, all passing, with coverage gates in CI. Phase 9 added the Playwright suite for the 11 reviewer scenarios, a chaos test that kills the API under load, a k6 load test, OpenTelemetry tests, session-lifetime tests and multi-factor sign-in tests (`TotpTests` with the RFC 6238 vectors, `MfaTests`, dashboard specs) (2026-11-24).
+Status: **Phases 2–9 covered**: 512 backend tests (unit, architecture, integration) and 100 dashboard tests, all passing, with coverage gates in CI. Phase 9 added the Playwright suite for the 11 reviewer scenarios, a chaos test that kills the API under load, a k6 load test, OpenTelemetry tests, session-lifetime tests and multi-factor sign-in tests (`TotpTests` with the RFC 6238 vectors, `MfaTests`, dashboard specs) and password-policy tests (`CommonPasswordValidatorTests`, `PasswordPolicyTests`) (2026-11-24).
 
 ## Test projects
 
@@ -231,7 +231,7 @@ Both test suites fail CI when coverage drops below a minimum set just under the 
 
 | Suite | Measured (2026-11-24) | Minimum enforced | Where |
 |---|---|---|---|
-| Backend: unit + architecture + integration, migrations and tests excluded | 92.3 % lines, 80.6 % branches | 90 % lines, 78 % branches | `ci.yml` (ReportGenerator merge + `build/check-coverage.py`) |
+| Backend: unit + architecture + integration, migrations and tests excluded | 92.4 % lines, 80.8 % branches | 90 % lines, 78 % branches | `ci.yml` (ReportGenerator merge + `build/check-coverage.py`) |
 | Dashboard (Vitest, v8) | 77.8 % statements, 73.0 % branches, 58.0 % functions, 77.0 % lines | 74 / 69 / 51 / 72 | `angular.json` `coverageThresholds` |
 
 Locally:

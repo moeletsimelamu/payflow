@@ -22,7 +22,7 @@ function matching(group: AbstractControl): ValidationErrors | null {
     <main class="pf-login" id="main">
       <section class="pf-card pf-login-card" aria-labelledby="accept-title">
         <h1 id="accept-title">Set up your PayFlow account</h1>
-        <p class="pf-muted">Choose a password of at least {{ minLength }} characters. The invitation can be used once and expires after 3 days.</p>
+        <p class="pf-muted">Choose a password of at least {{ minLength }} characters that is not a common password and does not contain your name, your email name or "PayFlow". A long passphrase works well. The invitation can be used once and expires after 3 days.</p>
         <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
           <mat-form-field appearance="outline">
             <mat-label>Email</mat-label>

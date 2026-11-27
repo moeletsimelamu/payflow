@@ -50,6 +50,7 @@ public static class IdentityModule
             .AddRoles<PayFlowRole>()
             .AddEntityFrameworkStores<PayFlowDbContext>()
             .AddSignInManager()
+            .AddPasswordValidator<Application.Passwords.CommonPasswordValidator>()
             .AddClaimsPrincipalFactory<PayFlowClaimsPrincipalFactory>()
             .AddDefaultTokenProviders();
 

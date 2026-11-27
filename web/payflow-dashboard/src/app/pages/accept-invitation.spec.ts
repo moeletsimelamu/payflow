@@ -85,6 +85,22 @@ describe('AcceptInvitationPage', () => {
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('invalid, already used or expired');
   });
 
+  it('shows why the server refused a breached password', async () => {
+    const { fixture, el } = await render('email=a%40b.test&token=t');
+    type(el, 'password', 'Qwerty123456');
+    type(el, 'confirm', 'Qwerty123456');
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    await settle(fixture);
+    http.expectOne('/api/auth/antiforgery').flush(null);
+    await settle(fixture);
+    http.expectOne('/api/auth/accept-invitation').flush(
+      { code: 'validation_failed', errors: { password: ['This password appears in lists of breached passwords. Choose a different one.'] } },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    await settle(fixture);
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain('appears in lists of breached passwords');
+  });
+
   it('has no axe accessibility violations', async () => {
     const { el } = await render(null);
     expect(await axeViolations(el)).toEqual([]);
