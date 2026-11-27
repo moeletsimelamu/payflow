@@ -20,6 +20,16 @@ test.describe('settlement, reconciliation and reports', () => {
 
   test.beforeAll(async ({ baseURL, browser }) => {
     test.setTimeout(120_000);
+    // Scenario 8 plants five discrepancies that each need one of today's transactions, taken in
+    // completion order. A bystander merchant's payments come first, so the plants land on them
+    // whatever else ran today, and this merchant's figures stay exact.
+    const bystander = await activeMerchant(baseURL!);
+    const bystanderApi = await MerchantApi.create(baseURL!, bystander.apiKey);
+    for (let i = 0; i < 5; i++) {
+      expect((await bystanderApi.pay({ amount: `${10 + i}.00` })).status()).toBe(201);
+    }
+    await bystanderApi.dispose();
+
     merchant = await activeMerchant(baseURL!);
     api = await MerchantApi.create(baseURL!, merchant.apiKey);
     for (const amount of ['100.00', '250.00', '49.99']) {
