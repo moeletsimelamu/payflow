@@ -31,7 +31,8 @@ builder.Services
     .AddReconciliationModule()
     .AddReportingModule()
     .AddScoped<IActorContext, HttpActorContext>()
-    .AddPayFlowApi(builder.Configuration);
+    .AddPayFlowApi(builder.Configuration)
+    .AddPayFlowTelemetry(builder.Configuration);
 
 var app = builder.Build();
 

@@ -1,6 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { Router, RouterLink, Routes } from '@angular/router';
-import { Auth, merchantMember, platformAdmin, signedIn } from './core/auth';
+import { Auth, merchantAdmin, merchantMember, platformAdmin, signedIn } from './core/auth';
 
 @Component({
   selector: 'pf-no-access',
@@ -30,17 +30,22 @@ const home = async () => {
 
 export const routes: Routes = [
   { path: 'login', title: 'Sign in · PayFlow', loadComponent: () => import('./pages/login').then((m) => m.LoginPage) },
+  { path: 'accept-invitation', title: 'Set up your account · PayFlow', loadComponent: () => import('./pages/accept-invitation').then((m) => m.AcceptInvitationPage) },
+  // Reachable before a session exists: platform admins set up their authenticator during sign-in.
+  { path: 'mfa-setup', title: 'Set up an authenticator · PayFlow', loadComponent: () => import('./pages/mfa-setup').then((m) => m.MfaSetupPage) },
   {
     path: '',
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
     canActivate: [signedIn],
     children: [
       { path: '', pathMatch: 'full', canActivate: [home], children: [] },
+      { path: 'account/security', title: 'Security · PayFlow', loadComponent: () => import('./pages/account-security').then((m) => m.AccountSecurityPage) },
       {
         path: 'admin',
         canActivate: [platformAdmin],
         children: [
           { path: 'merchants', title: 'Merchants · PayFlow', loadComponent: () => import('./pages/admin/merchants').then((m) => m.MerchantsPage) },
+          { path: 'merchants/new', title: 'Register a merchant · PayFlow', loadComponent: () => import('./pages/admin/register-merchant').then((m) => m.RegisterMerchantPage) },
           { path: 'settlements', title: 'Settlements · PayFlow', loadComponent: () => import('./pages/admin/settlements').then((m) => m.AdminSettlementsPage) },
           { path: 'reconciliation', title: 'Reconciliation · PayFlow', loadComponent: () => import('./pages/admin/reconciliation').then((m) => m.ReconciliationPage) },
           { path: 'reports', title: 'Platform reports · PayFlow', loadComponent: () => import('./pages/reports').then((m) => m.ReportsPage) },
@@ -55,7 +60,9 @@ export const routes: Routes = [
           { path: 'payments/:paymentId', title: 'Transaction · PayFlow', loadComponent: () => import('./pages/merchant/payment-detail').then((m) => m.PaymentDetailPage) },
           { path: 'settlements', title: 'Settlements · PayFlow', loadComponent: () => import('./pages/merchant/settlements').then((m) => m.MerchantSettlementsPage) },
           { path: 'settlements/:settlementId', title: 'Settlement · PayFlow', loadComponent: () => import('./pages/merchant/settlements').then((m) => m.SettlementDetailPage) },
-          { path: 'webhooks', title: 'Webhooks · PayFlow', loadComponent: () => import('./pages/merchant/webhooks').then((m) => m.WebhooksPage) },
+          { path: 'webhooks', title: 'Webhooks · PayFlow', canActivate: [merchantAdmin], loadComponent: () => import('./pages/merchant/webhooks').then((m) => m.WebhooksPage) },
+          { path: 'api-keys', title: 'API keys · PayFlow', canActivate: [merchantAdmin], loadComponent: () => import('./pages/merchant/api-keys').then((m) => m.ApiKeysPage) },
+          { path: 'team', title: 'Team · PayFlow', canActivate: [merchantAdmin], loadComponent: () => import('./pages/merchant/members').then((m) => m.MembersPage) },
           { path: 'reports', title: 'Reports · PayFlow', loadComponent: () => import('./pages/reports').then((m) => m.ReportsPage) },
         ],
       },

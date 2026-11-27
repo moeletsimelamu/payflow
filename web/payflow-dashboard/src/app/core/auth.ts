@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { Api, ApiError } from './api';
-import { CurrentUser, MemberRole } from './models';
+import { CurrentUser, LoginStep, MemberRole, MfaRecoveryCodes } from './models';
 
 /** The signed-in user, loaded once from /api/auth/me. The session itself is an HttpOnly cookie. */
 @Injectable({ providedIn: 'root' })
@@ -37,12 +37,36 @@ export class Auth {
     return this.pending;
   }
 
-  async login(email: string, password: string): Promise<CurrentUser> {
+  /** Signs in with a password; returns the user, or the second-factor step still needed. */
+  async login(email: string, password: string): Promise<CurrentUser | LoginStep> {
     await this.api.antiforgery(); // the login POST must carry the XSRF token too
-    const user = await this.api.login(email, password);
+    const result = await this.api.login(email, password);
+    if ('next' in result) {
+      return result;
+    }
+    this.signedIn(result);
+    return result;
+  }
+
+  /** Second step of sign-in: an authenticator code or a recovery code. */
+  async verifyMfa(answer: { code: string } | { recoveryCode: string }): Promise<CurrentUser> {
+    const user = await this.api.verifyMfa(answer);
+    this.signedIn(user);
+    return user;
+  }
+
+  /** Activates a new authenticator; the response carries the recovery codes (shown once) and the session. */
+  async confirmMfaEnrollment(code: string): Promise<MfaRecoveryCodes> {
+    const result = await this.api.confirmMfaEnrollment(code);
+    if (result.user) {
+      this.signedIn(result.user);
+    }
+    return result;
+  }
+
+  private signedIn(user: CurrentUser): void {
     this.current.set(user);
     this.pending = null;
-    return user;
   }
 
   async logout(): Promise<void> {
@@ -103,6 +127,15 @@ export const platformAdmin: CanActivateFn = async () => {
   const router = inject(Router);
   const user = await auth.ensureLoaded();
   return user?.isPlatformAdmin ? true : router.createUrlTree(['/']);
+};
+
+/** Merchant configuration pages (keys, team, webhooks): MerchantAdmins of that merchant and platform admins. */
+export const merchantAdmin: CanActivateFn = async (route) => {
+  const auth = inject(Auth);
+  const router = inject(Router);
+  await auth.ensureLoaded();
+  const merchantId = route.parent?.paramMap.get('merchantId') ?? route.paramMap.get('merchantId') ?? '';
+  return auth.isMerchantAdmin(merchantId) ? true : router.createUrlTree(['/no-access']);
 };
 
 /** The UI check mirrors the API's: platform admins and members of the merchant in the route. */

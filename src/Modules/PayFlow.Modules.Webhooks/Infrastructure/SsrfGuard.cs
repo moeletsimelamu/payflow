@@ -121,6 +121,8 @@ internal static class SsrfGuard
         {
             AllowAutoRedirect = false,
             UseCookies = false,
+            // Never send traceparent/tracestate/baggage to a merchant's server: trace ids are internal.
+            ActivityHeadersPropagator = System.Diagnostics.DistributedContextPropagator.CreateNoOutputPropagator(),
             UseProxy = false,
             ConnectTimeout = TimeSpan.FromSeconds(5),
             PooledConnectionLifetime = TimeSpan.FromMinutes(2),

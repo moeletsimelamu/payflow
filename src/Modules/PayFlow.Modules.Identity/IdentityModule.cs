@@ -28,6 +28,7 @@ public static class IdentityModule
         services.AddSingleton<IModuleDbModel, IdentityDbModel>();
         services.AddHttpContextAccessor();
         services.Configure<PlatformAdminSeedOptions>(configuration.GetSection(PlatformAdminSeedOptions.Section));
+        services.Configure<MfaOptions>(configuration.GetSection(MfaOptions.Section));
         services.Configure<PasswordHasherOptions>(o => o.IterationCount = PasswordHashIterations);
 
         services
@@ -49,6 +50,7 @@ public static class IdentityModule
             .AddRoles<PayFlowRole>()
             .AddEntityFrameworkStores<PayFlowDbContext>()
             .AddSignInManager()
+            .AddPasswordValidator<Application.Passwords.CommonPasswordValidator>()
             .AddClaimsPrincipalFactory<PayFlowClaimsPrincipalFactory>()
             .AddDefaultTokenProviders();
 
@@ -65,10 +67,27 @@ public static class IdentityModule
             o.SlidingExpiration = true;
             o.Events = new CookieAuthenticationEvents
             {
+                // Assigning Events replaces the handlers AddIdentityCookies registered, including the
+                // security-stamp check: SessionLifetime runs it again (with the absolute lifetime).
+                OnSigningIn = SessionLifetime.OnSigningIn,
+                OnValidatePrincipal = SessionLifetime.OnValidatePrincipal,
+
                 // An API never redirects to a login page; it answers with problem details.
                 OnRedirectToLogin = ctx => WriteProblem(ctx.HttpContext, Error.Unauthorized("authentication_required", "Sign in to continue.")),
                 OnRedirectToAccessDenied = ctx => WriteProblem(ctx.HttpContext, Error.Forbidden("forbidden", "You do not have permission to perform this action.")),
             };
+        });
+
+        // The pending sign-in between a verified password and its second factor (Identity's
+        // two-factor user-id scheme): short-lived, never renewed, same cookie hardening as the session.
+        services.Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorUserIdScheme, o =>
+        {
+            o.Cookie.Name = AuthCookies.PendingSignIn;
+            o.Cookie.HttpOnly = true;
+            o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            o.Cookie.SameSite = SameSiteMode.Strict;
+            o.ExpireTimeSpan = TimeSpan.FromMinutes(5);
+            o.SlidingExpiration = false;
         });
 
         services.AddAntiforgery(o =>
@@ -100,6 +119,9 @@ public static class IdentityModule
         services.AddScoped<IMerchantMembershipAdmin, MerchantMembershipAdmin>();
         services.AddScoped<IValidator<LoginRequest>, LoginRequestValidator>();
         services.AddScoped<IValidator<AcceptInvitationRequest>, AcceptInvitationRequestValidator>();
+        services.AddScoped<IValidator<MfaVerifyRequest>, MfaVerifyRequestValidator>();
+        services.AddScoped<IValidator<MfaCodeRequest>, MfaCodeRequestValidator>();
+        services.AddScoped<MfaService>();
         services.AddScoped<IdentitySeeder>();
         return services;
     }

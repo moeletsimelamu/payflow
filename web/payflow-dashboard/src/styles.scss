@@ -258,6 +258,42 @@ mat-sidenav {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.pf-wide {
+  min-width: min(480px, 100%);
+}
+.pf-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+.pf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.pf-endpoints li {
+  margin-bottom: 12px;
+}
+.pf-inline-input {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--pf-border);
+  border-radius: 4px;
+  width: 9em;
+}
+.pf-tiny {
+  width: 4.5em;
+}
+.pf-danger.mat-mdc-unelevated-button,
+.pf-danger.mat-mdc-outlined-button {
+  --mat-button-filled-container-color: #a4161a;
+  --mat-button-outlined-label-text-color: #a4161a;
+}
+.pf-danger-text {
+  --mat-button-text-label-text-color: #a4161a;
+}
 .pf-break {
   word-break: break-all;
 }

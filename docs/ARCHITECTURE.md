@@ -177,27 +177,28 @@ All workers are `BackgroundService`s inside the API host, safe to run on multipl
 
 | Control | Design |
 |---|---|
-| Dashboard auth | ASP.NET Core Identity with PBKDF2-HMAC-SHA512 at 210,000 iterations (OWASP 2023 figure for that hash), 12+ character passwords without composition rules (NIST SP 800-63B), lockout after 5 failures for 15 min, identical 401 for unknown user / wrong password / locked out, constant-time dummy hash for unknown users. TOTP MFA for PlatformAdmin is planned for Phase 9. Session via `__Host-payflow.session` (HttpOnly, Secure, SameSite=Strict), sliding 30 min, security stamp revalidated every minute. No tokens in `localStorage`. |
+| Dashboard auth | ASP.NET Core Identity with PBKDF2-HMAC-SHA512 at 210,000 iterations (OWASP 2023 figure for that hash), 12+ character passwords without composition rules (NIST SP 800-63B), refused if they appear in a bundled breach list or contain the user's email name, display name or "PayFlow", lockout after 5 failures for 15 min, identical 401 for unknown user / wrong password / locked out, constant-time dummy hash for unknown users. TOTP MFA (RFC 6238, secret encrypted at rest, each code accepted once, 10 single-use recovery codes stored as salted hashes) required for platform admins and optional for merchant users; a password alone gives such users only a 5-minute pending sign-in, and failed codes count towards the lock-out. Session via `__Host-payflow.session` (HttpOnly, Secure, SameSite=Strict), sliding 30 min, absolute 12 h, security stamp and claims revalidated every minute. No tokens in `localStorage`. |
 | CSRF | Angular's built-in XSRF support with ASP.NET Core antiforgery (`X-XSRF-TOKEN`). |
 | Merchant API keys | Format `pf_test_sk_<8-char prefix>_<32-byte base62 secret>`. Stored as prefix + **HMAC-SHA256(secret, server pepper)**; constant-time compare. Shown once. Rotation with grace period. Prefix-only in logs/UI. |
 | Webhook signing secrets | Needed in plaintext to sign, so stored **encrypted** (AES-256-GCM via ASP.NET Data Protection, keys persisted in DB and protected by a master key from environment/secret store). Shown once. |
 | Authorization | Policies: `PlatformAdmin`, `MerchantAdmin`, `MerchantMember`; every merchant-scoped query filtered by `merchant_id` (EF global query filter from the current tenant context) + explicit ownership checks. Cross-tenant tests in CI. |
 | Input validation | FluentValidation on every request; strict JSON (unknown properties rejected on `/v1`); size limits; **PAN detector** rejects any Luhn-valid 13–19 digit sequence in any string field. |
-| Rate limiting | Per API key (e.g. 100 req/s burst, 6000/min), per login IP/username (login brute force), per user on dashboard. 429 with `Retry-After`. |
+| Rate limiting | Per API key 600 requests/min, shared across instances in Redis; sign-in 10/min per client IP plus per-account lock-out. 429 with `Retry-After`. |
 | Replay / duplicates | Idempotency keys on writes; webhook signatures include timestamp (5-min tolerance) and event id. |
 | Redaction | Serilog destructuring policy + `[Sensitive]` attribute; `Authorization`, cookies, API keys, secrets, signatures never logged; webhook attempt logs store redacted headers. |
 | Audit | Every privileged action writes an append-only audit record (actor, action, target, before/after diff, correlation id, IP, UTC time). |
-| Secrets config | No secrets in `appsettings.json`. Dev: `dotnet user-secrets` / `.env` (git-ignored). Compose: Docker secrets. Startup fails fast if required secrets are missing. |
+| Secrets config | No secrets in `appsettings.json`. Dev: `dotnet user-secrets` / `.env` (git-ignored). Compose passes them as environment variables (local use only; production injects them from a secret store: SECURITY.md, SEC-7). Startup fails fast if required secrets are missing. |
 | SSRF (webhooks) | HTTPS only (HTTP allowed for `webhook-sink` in Development), DNS resolved and private/link-local/loopback/metadata ranges blocked at connect time, no redirects followed. |
 | Transport & headers | HSTS, CSP (`default-src 'self'`), `X-Content-Type-Options`, `Referrer-Policy`, `frame-ancestors 'none'`. |
 | DB privileges | App role cannot `UPDATE`/`DELETE` ledger, status history and audit tables (grants + triggers). Migrations run under a separate role. |
 
 ## 8. Observability
 
-- Serilog JSON logs with `correlationId`, `merchantId`, `paymentId` scopes.
-- OpenTelemetry traces across HTTP → service → EF → outbox → webhook send.
-- Metrics: `payflow_payments_total{status}`, `payflow_payment_processing_seconds`, `payflow_webhook_attempts_total{outcome}`, `payflow_outbox_lag_seconds`, `payflow_reconciliation_exceptions_open`.
-- Health checks: Postgres, Redis, outbox lag threshold.
+- **Logs:** Serilog JSON on stdout, written through a bounded background queue (a synchronous console sink stalled requests under load). Every line carries the correlation id and, inside a span, the trace and span ids.
+- **Traces (OpenTelemetry):** one trace per HTTP request (health probes excluded) and one per unit of background work (`outbox.dispatch`, `webhook.deliver`, `refund.process`, `payment.resolve_pending`, `payment.recover_processing`), each with its database and outbound HTTP calls as child spans and tagged `payflow.correlation_id`, so a request and the work it causes can be found together. Idle worker polls create no spans. Webhook requests never carry trace headers to merchants.
+- **Metrics:** PayFlow's meter (`payflow.payments.outcomes{payflow.payment.status}`, `payflow.refunds.outcomes`, `payflow.webhooks.attempts{payflow.outcome}`, `payflow.webhooks.attempt.duration`, `payflow.worker.batch.duration{payflow.job}`, `payflow.worker.items`, `payflow.worker.failures`) plus ASP.NET Core, HttpClient, Npgsql and .NET runtime metrics. Tags never carry amounts, merchant ids or other high-cardinality or sensitive values.
+- **Export:** OTLP, switched on by `OTEL_EXPORTER_OTLP_ENDPOINT` (Compose: `PAYFLOW_OTLP_ENDPOINT`); `Telemetry:TraceSampleRatio` sets the share of traces kept (0.1 under load: full sampling added ~0.5 s to p95 at 100 req/s). Compose profile `observability` runs a local viewer (traces, metrics) on http://localhost:18888.
+- **Health checks:** `/health/live` (process) and `/health/ready` (Postgres, Redis).
 
 ## 9. Deployment topology (Docker Compose)
 

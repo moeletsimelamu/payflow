@@ -20,6 +20,7 @@ import { UtcPipe } from '../../shared/pipes';
     <header class="pf-page-header">
       <h1>Merchants</h1>
       <p class="pf-muted">Every merchant on the platform. Open one to see its transactions, settlements and reports.</p>
+      <a mat-flat-button routerLink="/admin/merchants/new">Register a merchant</a>
     </header>
 
     <form class="pf-filters" (ngSubmit)="apply()" role="search" aria-label="Filter merchants">

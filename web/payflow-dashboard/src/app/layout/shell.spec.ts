@@ -7,17 +7,17 @@ describe('navFor', () => {
     const admin = { isPlatformAdmin: true, memberships: [] };
     expect(navFor(admin, null).platform.map((i) => i.label)).toEqual(['Merchants', 'Settlements', 'Reconciliation', 'Reports']);
     expect(navFor(admin, null).merchant).toEqual([]);
-    expect(navFor(admin, MERCHANT).merchant.map((i) => i.label)).toEqual(['Overview', 'Transactions', 'Settlements', 'Reports', 'Webhooks']);
+    expect(navFor(admin, MERCHANT).merchant.map((i) => i.label)).toEqual(['Overview', 'Transactions', 'Settlements', 'Reports', 'Webhooks', 'API keys', 'Team']);
   });
 
-  it('gives merchant admins webhooks but no platform pages', () => {
+  it('gives merchant admins webhooks, keys and team but no platform pages', () => {
     const user = { isPlatformAdmin: false, memberships: [{ merchantId: MERCHANT, role: 'MerchantAdmin' }] };
     const nav = navFor(user, MERCHANT);
     expect(nav.platform).toEqual([]);
-    expect(nav.merchant.map((i) => i.link)).toContain(`/merchants/${MERCHANT}/webhooks`);
+    expect(nav.merchant.map((i) => i.link)).toEqual(expect.arrayContaining([`/merchants/${MERCHANT}/webhooks`, `/merchants/${MERCHANT}/api-keys`, `/merchants/${MERCHANT}/team`]));
   });
 
-  it('hides webhook configuration from operators', () => {
+  it('hides configuration pages from operators', () => {
     const user = { isPlatformAdmin: false, memberships: [{ merchantId: MERCHANT, role: 'MerchantOperator' }] };
     expect(navFor(user, MERCHANT).merchant.map((i) => i.label)).toEqual(['Overview', 'Transactions', 'Settlements', 'Reports']);
   });

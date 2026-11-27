@@ -2,11 +2,21 @@ import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
+  ApiKey,
   CurrentUser,
   Delivery,
   ExceptionStatus,
+  FeePlan,
   GeneratedStatement,
+  IssuedApiKey,
+  LoginStep,
+  Member,
+  MemberInvitation,
+  MemberRole,
   Merchant,
+  MfaEnrollment,
+  MfaRecoveryCodes,
+  MfaStatus,
   Page,
   PaymentDetail,
   PaymentRefunds,
@@ -16,6 +26,8 @@ import {
   ReconciliationOutcome,
   ReconciliationRun,
   Refund,
+  RegisteredMerchant,
+  RegisterMerchantRequest,
   Report,
   ResolutionType,
   SettlementBatch,
@@ -23,6 +35,7 @@ import {
   SettlementStatus,
   Statement,
   WebhookEndpoint,
+  WebhookSecret,
 } from './models';
 
 type Query = Record<string, string | number | boolean | null | undefined>;
@@ -79,8 +92,12 @@ export class Api {
   }
 
   private async post<T>(url: string, body: unknown, headers?: Record<string, string>): Promise<T> {
+    return this.send<T>('POST', url, body, headers);
+  }
+
+  private async send<T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
     try {
-      return await firstValueFrom(this.http.post<T>(url, body, { headers: new HttpHeaders(headers ?? {}) }));
+      return await firstValueFrom(this.http.request<T>(method, url, { body, headers: new HttpHeaders(headers ?? {}) }));
     } catch (e) {
       throw ApiError.from(e);
     }
@@ -90,14 +107,36 @@ export class Api {
   antiforgery(): Promise<unknown> {
     return this.get('/api/auth/antiforgery');
   }
-  login(email: string, password: string): Promise<CurrentUser> {
+  /** A session (the user), or the second-factor step still needed. */
+  login(email: string, password: string): Promise<CurrentUser | LoginStep> {
     return this.post('/api/auth/login', { email, password });
+  }
+  verifyMfa(answer: { code: string } | { recoveryCode: string }): Promise<CurrentUser> {
+    return this.post('/api/auth/mfa/verify', answer);
+  }
+  startMfaEnrollment(): Promise<MfaEnrollment> {
+    return this.post('/api/auth/mfa/enrollment', null);
+  }
+  confirmMfaEnrollment(code: string): Promise<MfaRecoveryCodes> {
+    return this.post('/api/auth/mfa/enrollment/confirm', { code });
+  }
+  mfaStatus(): Promise<MfaStatus> {
+    return this.get('/api/auth/mfa');
+  }
+  regenerateRecoveryCodes(code: string): Promise<MfaRecoveryCodes> {
+    return this.post('/api/auth/mfa/recovery-codes', { code });
+  }
+  disableMfa(code: string): Promise<unknown> {
+    return this.post('/api/auth/mfa/disable', { code });
   }
   me(): Promise<CurrentUser> {
     return this.get('/api/auth/me');
   }
   logout(): Promise<unknown> {
     return this.post('/api/auth/logout', {});
+  }
+  acceptInvitation(email: string, token: string, password: string): Promise<unknown> {
+    return this.post('/api/auth/accept-invitation', { email, token, password });
   }
 
   // Merchants
@@ -106,6 +145,44 @@ export class Api {
   }
   merchant(merchantId: string): Promise<Merchant> {
     return this.get(`/api/merchants/${merchantId}`);
+  }
+  registerMerchant(body: RegisterMerchantRequest): Promise<RegisteredMerchant> {
+    return this.post('/api/merchants', body);
+  }
+  changeMerchantStatus(merchantId: string, status: 'Active' | 'Suspended' | 'Closed', reason: string | null): Promise<Merchant> {
+    return this.post(`/api/merchants/${merchantId}/status`, { status, reason });
+  }
+  setCurrencyLimits(merchantId: string, currency: string, body: { maxPaymentAmount: string; operatorRefundLimit: string | null }): Promise<Merchant> {
+    return this.send('PUT', `/api/merchants/${merchantId}/currencies/${currency}`, body);
+  }
+  feePlans(): Promise<FeePlan[]> {
+    return this.get('/api/fee-plans');
+  }
+
+  // API keys and members (MerchantAdmin)
+  apiKeys(merchantId: string): Promise<ApiKey[]> {
+    return this.get(`/api/merchants/${merchantId}/api-keys`);
+  }
+  createApiKey(merchantId: string, name: string): Promise<IssuedApiKey> {
+    return this.post(`/api/merchants/${merchantId}/api-keys`, { name });
+  }
+  rotateApiKey(merchantId: string, keyId: string, gracePeriodHours: number): Promise<IssuedApiKey> {
+    return this.post(`/api/merchants/${merchantId}/api-keys/${keyId}/rotate`, { gracePeriodHours });
+  }
+  revokeApiKey(merchantId: string, keyId: string): Promise<ApiKey> {
+    return this.post(`/api/merchants/${merchantId}/api-keys/${keyId}/revoke`, {});
+  }
+  members(merchantId: string): Promise<Member[]> {
+    return this.get(`/api/merchants/${merchantId}/members`);
+  }
+  inviteMember(merchantId: string, body: { email: string; displayName: string; role: MemberRole }): Promise<MemberInvitation> {
+    return this.post(`/api/merchants/${merchantId}/members`, body);
+  }
+  changeMemberRole(merchantId: string, userId: string, role: MemberRole): Promise<unknown> {
+    return this.send('PATCH', `/api/merchants/${merchantId}/members/${userId}`, { role });
+  }
+  removeMember(merchantId: string, userId: string): Promise<unknown> {
+    return this.send('DELETE', `/api/merchants/${merchantId}/members/${userId}`);
   }
 
   // Payments and refunds
@@ -126,6 +203,21 @@ export class Api {
   // Webhooks
   webhookEndpoints(merchantId: string): Promise<WebhookEndpoint[]> {
     return this.get(`/api/merchants/${merchantId}/webhook-endpoints`);
+  }
+  createWebhookEndpoint(merchantId: string, body: { url: string; description: string | null; eventTypes: string[] }): Promise<WebhookSecret> {
+    return this.post(`/api/merchants/${merchantId}/webhook-endpoints`, body);
+  }
+  updateWebhookEndpoint(merchantId: string, endpointId: string, body: { isEnabled?: boolean; eventTypes?: string[]; description?: string | null }): Promise<WebhookEndpoint> {
+    return this.send('PATCH', `/api/merchants/${merchantId}/webhook-endpoints/${endpointId}`, body);
+  }
+  rollWebhookSecret(merchantId: string, endpointId: string): Promise<WebhookSecret> {
+    return this.post(`/api/merchants/${merchantId}/webhook-endpoints/${endpointId}/roll-secret`, {});
+  }
+  pingWebhookEndpoint(merchantId: string, endpointId: string): Promise<Delivery> {
+    return this.post(`/api/merchants/${merchantId}/webhook-endpoints/${endpointId}/ping`, {});
+  }
+  redeliver(merchantId: string, deliveryId: string): Promise<Delivery> {
+    return this.post(`/api/merchants/${merchantId}/webhook-deliveries/${deliveryId}/redeliver`, {});
   }
   deliveries(merchantId: string, query: { status?: string; eventType?: string; page?: number; pageSize?: number }): Promise<Page<Delivery>> {
     return this.get(`/api/merchants/${merchantId}/webhook-deliveries`, query);

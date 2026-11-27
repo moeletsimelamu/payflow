@@ -2,3 +2,5 @@
 # Shell scripts run inside Linux containers and must keep LF endings.
 *.sh text eol=lf
 *.sql text eol=lf
+# Bundled data files keep LF so their byte size and hash do not depend on the checkout platform
+src/Modules/PayFlow.Modules.Identity/Application/Passwords/*.txt text eol=lf

@@ -44,7 +44,8 @@ export function navFor(
     { label: 'Reports', link: `${base}/reports` },
   ];
   if (isAdmin) {
-    merchant.push({ label: 'Webhooks', link: `${base}/webhooks` }); // endpoint configuration is MerchantAdmin-only
+    // Configuration is MerchantAdmin-only (and platform admins).
+    merchant.push({ label: 'Webhooks', link: `${base}/webhooks` }, { label: 'API keys', link: `${base}/api-keys` }, { label: 'Team', link: `${base}/team` });
   }
   return { platform, merchant };
 }
@@ -66,6 +67,7 @@ export function navFor(
       <span class="pf-spacer"></span>
       @if (auth.user(); as user) {
         <span class="pf-user">{{ user.displayName }}@if (user.isPlatformAdmin) { · Platform admin }</span>
+        <a mat-button routerLink="/account/security">Security</a>
         <button mat-button type="button" (click)="signOut()">Sign out</button>
       }
     </mat-toolbar>

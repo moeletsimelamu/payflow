@@ -29,3 +29,6 @@ Thumbs.db
 
 # Local gateway CA copied for the dashboard dev proxy
 web/payflow-dashboard/.certs/
+
+# Merged backend coverage (CI and local runs)
+coverage-report/

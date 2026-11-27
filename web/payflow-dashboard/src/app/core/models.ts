@@ -13,6 +13,29 @@ export interface CurrentUser {
   displayName: string;
   isPlatformAdmin: boolean;
   memberships: Membership[];
+  mfaEnabled: boolean;
+}
+
+/** A verified password that still needs a second factor (202 from /api/auth/login). */
+export interface LoginStep {
+  next: 'mfa' | 'mfa_enrollment';
+}
+
+export interface MfaEnrollment {
+  secret: string;
+  provisioningUri: string;
+}
+
+export interface MfaRecoveryCodes {
+  recoveryCodes: string[];
+  notice: string;
+  user?: CurrentUser | null;
+}
+
+export interface MfaStatus {
+  enabled: boolean;
+  required: boolean;
+  recoveryCodesRemaining: number;
 }
 
 export interface Page<T> {
@@ -158,6 +181,67 @@ export interface PaymentRefunds {
   reversal: Reversal | null;
 }
 
+export interface ApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  state: 'Active' | 'Expiring' | 'Expired' | 'Revoked';
+  createdAt: string;
+  createdBy: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  revokedAt: string | null;
+}
+
+/** Returned once, when a key is created or rotated: the secret is never retrievable again. */
+export interface IssuedApiKey {
+  key: ApiKey;
+  secret: string;
+  notice: string;
+}
+
+export interface Member {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: MemberRole;
+  addedAt: string;
+  hasAcceptedInvitation: boolean;
+}
+
+export interface MemberInvitation {
+  userId: string;
+  email: string;
+  role: MemberRole;
+  /** Only for users without a password yet; shown once. */
+  invitationToken: string | null;
+}
+
+export interface FeePlan {
+  id: string;
+  name: string;
+  version: number;
+  percentageRate: string;
+  terms: { currency: string; fixedFee: string; minPaymentAmount: string }[];
+  createdAt: string;
+}
+
+export interface RegisterMerchantRequest {
+  legalName: string;
+  tradingName: string;
+  contactEmail: string;
+  countryCode: string;
+  currencies: { currency: string; maxPaymentAmount: string; operatorRefundLimit: string | null }[];
+  feePlanId: string | null;
+  adminEmail: string | null;
+  adminDisplayName: string | null;
+}
+
+export interface RegisteredMerchant {
+  merchant: Merchant;
+  adminInvitation: MemberInvitation | null;
+}
+
 export interface WebhookEndpoint {
   id: string;
   url: string;
@@ -165,8 +249,30 @@ export interface WebhookEndpoint {
   eventTypes: string[];
   isEnabled: boolean;
   secretHint: string;
+  previousSecretExpiresAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
+
+export interface WebhookSecret {
+  endpoint: WebhookEndpoint;
+  secret: string;
+  notice: string;
+}
+
+/** Event types an endpoint can subscribe to (WebhookEventTypes.Subscribable). */
+export const WEBHOOK_EVENT_TYPES = [
+  'payment.pending',
+  'payment.succeeded',
+  'payment.declined',
+  'payment.failed',
+  'payment.expired',
+  'payment.reversed',
+  'refund.succeeded',
+  'refund.failed',
+  'settlement.paid',
+  'webhook.ping',
+];
 
 export interface DeliveryAttempt {
   attemptNumber: number;

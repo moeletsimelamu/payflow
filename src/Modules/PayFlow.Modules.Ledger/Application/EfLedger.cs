@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using PayFlow.Infrastructure.Correlation;
 using PayFlow.Infrastructure.Persistence;
@@ -8,9 +9,27 @@ using PayFlow.SharedKernel.Results;
 
 namespace PayFlow.Modules.Ledger.Application;
 
-internal sealed class EfLedger(PayFlowDbContext db, IdGenerator ids, TimeProvider clock, ICorrelationContext correlation) : ILedger
+/// <summary>
+/// Committed account ids by code, shared by every request. Accounts are append-only (a trigger rejects
+/// UPDATE and DELETE) and a code is unique, so a committed mapping can never become wrong. Without it
+/// every payment spent six round trips, and a write lock on ledger.accounts, re-resolving the same
+/// three accounts. Only ids read back by a plain SELECT (which sees committed rows only) go in here:
+/// an account created inside the caller's still-open transaction could be rolled back, and other
+/// transactions cannot reference it until it commits.
+/// </summary>
+internal sealed class LedgerAccountCache
 {
-    private readonly Dictionary<string, Guid> _accounts = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Guid> _ids = new(StringComparer.Ordinal);
+
+    public bool TryGet(string code, out Guid id) => _ids.TryGetValue(code, out id);
+
+    public void AddCommitted(string code, Guid id) => _ids.TryAdd(code, id);
+}
+
+internal sealed class EfLedger(PayFlowDbContext db, IdGenerator ids, TimeProvider clock, ICorrelationContext correlation, LedgerAccountCache accounts) : ILedger
+{
+    /// <summary>Accounts this unit of work created or found after inserting; not yet known to be committed.</summary>
+    private readonly Dictionary<string, Guid> _uncommitted = new(StringComparer.Ordinal);
 
     public async Task PostAsync(JournalEntryRequest entry, CancellationToken cancellationToken)
     {
@@ -87,9 +106,18 @@ internal sealed class EfLedger(PayFlowDbContext db, IdGenerator ids, TimeProvide
     private async Task<Guid> ResolveAccountAsync(LedgerAccountKind kind, Guid? merchantId, string currency, CancellationToken ct)
     {
         var code = LedgerAccount.CodeFor(kind, merchantId, currency);
-        if (_accounts.TryGetValue(code, out var cached))
+        if (accounts.TryGet(code, out var cached) || _uncommitted.TryGetValue(code, out cached))
         {
             return cached;
+        }
+
+        // This unit of work has not inserted the code (checked above), so a row this SELECT sees was
+        // committed by someone else: safe to share.
+        var existing = await db.Set<LedgerAccount>().AsNoTracking().Where(a => a.Code == code).Select(a => (Guid?)a.Id).SingleOrDefaultAsync(ct);
+        if (existing is { } known)
+        {
+            accounts.AddCommitted(code, known);
+            return known;
         }
 
         var id = ids.NewId();
@@ -103,8 +131,10 @@ internal sealed class EfLedger(PayFlowDbContext db, IdGenerator ids, TimeProvide
             ON CONFLICT (code) DO NOTHING
             """,
             ct);
+        // Either this transaction's own insert or a concurrent one it waited for; the next unit of work
+        // that reads it with a plain SELECT promotes it to the shared cache.
         var accountId = await db.Set<LedgerAccount>().Where(a => a.Code == code).Select(a => a.Id).SingleAsync(ct);
-        _accounts[code] = accountId;
+        _uncommitted[code] = accountId;
         return accountId;
     }
 }

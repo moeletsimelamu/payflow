@@ -634,6 +634,78 @@ namespace PayFlow.Migrations.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PayFlow.Modules.Identity.Domain.MfaRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<byte[]>("Hash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("hash");
+
+                    b.Property<byte[]>("Salt")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("salt");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mfa_recovery_codes");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_mfa_recovery_codes_user_id");
+
+                    b.ToTable("mfa_recovery_codes", "identity");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Identity.Domain.UserMfa", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTimeOffset?>("EnabledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("enabled_at");
+
+                    b.Property<long>("LastUsedStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_used_step");
+
+                    b.Property<DateTimeOffset?>("PendingCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pending_created_at");
+
+                    b.Property<string>("PendingSecretCiphertext")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("pending_secret_ciphertext");
+
+                    b.Property<string>("SecretCiphertext")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("secret_ciphertext");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_user_mfa");
+
+                    b.ToTable("user_mfa", "identity");
+                });
+
             modelBuilder.Entity("PayFlow.Modules.Ledger.Domain.JournalEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2582,6 +2654,26 @@ namespace PayFlow.Migrations.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_merchant_memberships_users_user_id");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Identity.Domain.MfaRecoveryCode", b =>
+                {
+                    b.HasOne("PayFlow.Infrastructure.Persistence.PayFlowUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_mfa_recovery_codes_users_user_id");
+                });
+
+            modelBuilder.Entity("PayFlow.Modules.Identity.Domain.UserMfa", b =>
+                {
+                    b.HasOne("PayFlow.Infrastructure.Persistence.PayFlowUser", null)
+                        .WithOne()
+                        .HasForeignKey("PayFlow.Modules.Identity.Domain.UserMfa", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_mfa_users_user_id");
                 });
 
             modelBuilder.Entity("PayFlow.Modules.Ledger.Domain.LedgerAccount", b =>

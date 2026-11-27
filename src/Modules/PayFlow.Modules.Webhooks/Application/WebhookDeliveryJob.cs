@@ -1,3 +1,4 @@
+using PayFlow.Infrastructure.Telemetry;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http.Headers;
@@ -82,6 +83,9 @@ internal sealed class WebhookDeliveryJob(
         var correlation = sp.GetRequiredService<CorrelationContext>();
         var started = clock.GetUtcNow();
         var attemptNumber = delivery.NextAttemptNumber;
+        using var activity = PayFlowTelemetry.StartWork("webhook.deliver", correlation.CorrelationId);
+        activity?.SetTag("payflow.event_type", webhookEvent.Type);
+        activity?.SetTag("payflow.attempt", attemptNumber);
 
         if (!endpoint.IsEnabled)
         {
@@ -145,6 +149,14 @@ internal sealed class WebhookDeliveryJob(
         }
 
         var finished = clock.GetUtcNow();
+        var outcome = PayFlowTelemetry.Tag("payflow.outcome", error?.ToString() ?? "Success");
+        PayFlowTelemetry.WebhookAttempts.Add(1, outcome);
+        PayFlowTelemetry.WebhookAttemptDuration.Record(stopwatch.Elapsed.TotalSeconds, outcome);
+        if (error is not null)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, error.ToString());
+        }
+
         if (error is null)
         {
             delivery.RecordSuccess(finished);

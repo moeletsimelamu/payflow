@@ -133,4 +133,5 @@ docs/                      design documentation
 | [API.md](docs/API.md) | Endpoints, conventions, error codes |
 | [SETTLEMENT.md](docs/SETTLEMENT.md) | Settlement batches, carry-forward, payouts, concurrency guarantees |
 | [RECONCILIATION.md](docs/RECONCILIATION.md) | Statement format, generator, matching rules, exception workflow, adjustments |
-| SECURITY.md · DEPLOYMENT.md | Written as the corresponding phases are built |
+| [SECURITY.md](docs/SECURITY.md) | ASVS 5.0 Level 2 review, findings and their status, how to report a vulnerability |
+| DEPLOYMENT.md | Written in Phase 10 |

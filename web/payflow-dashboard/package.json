@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "start:gateway": "ng serve --proxy-config proxy.conf.mjs",
-    "test:ci": "ng test --watch=false"
+    "test:ci": "ng test --watch=false --coverage"
   },
   "private": true,
   "packageManager": "npm@11.21.1",
@@ -30,6 +30,7 @@
     "@angular/build": "^21.2.13",
     "@angular/cli": "^21.2.13",
     "@angular/compiler-cli": "^21.2.0",
+    "@vitest/coverage-v8": "4.1.12",
     "axe-core": "4.14.1",
     "jsdom": "^28.0.0",
     "prettier": "^3.8.1",

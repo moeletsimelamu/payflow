@@ -17,6 +17,7 @@ public static class LedgerModule
     public static IServiceCollection AddLedgerModule(this IServiceCollection services)
     {
         services.AddSingleton<IModuleDbModel, LedgerDbModel>();
+        services.AddSingleton<LedgerAccountCache>();
         services.AddScoped<ILedger, EfLedger>();
         return services;
     }
